@@ -1,0 +1,31 @@
+[package]
+name = "oxiquic"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "OxiQUIC Pure-Rust QUIC facade for the COOLJAPAN ecosystem."
+categories = ["network-programming", "asynchronous"]
+keywords = ["quic", "pure-rust", "cooljapan", "oxiquic", "tls"]
+
+[features]
+default   = ["transport"]
+transport = ["dep:oxiquic-transport", "dep:oxiquic-crypto", "dep:oxitls", "dep:rustls"]
+h3        = ["dep:oxiquic-h3", "oxiquic-h3/h3-compat", "dep:oxiquic-crypto", "dep:oxitls", "dep:rustls"]
+dangerous = ["transport", "oxiquic-transport/dangerous"]
+
+[dependencies]
+oxiquic-core      = { workspace = true }
+oxiquic-transport = { workspace = true, optional = true }
+oxiquic-h3        = { workspace = true, optional = true }
+oxiquic-crypto    = { workspace = true, optional = true }
+oxitls            = { workspace = true, optional = true }
+rustls             = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio          = { workspace = true, features = ["rt-multi-thread", "macros"] }
+oxitls-rcgen   = { workspace = true }
+oxiquic-crypto = { workspace = true }
+rustls         = { workspace = true }

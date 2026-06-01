@@ -1,0 +1,9 @@
+[bans]
+multiple-versions = "warn"
+deny = [
+    { name = "ring" },
+    { name = "aws-lc-rs" },
+    { name = "aws-lc-sys" },
+    { name = "openssl" },
+    { name = "openssl-sys" },
+]

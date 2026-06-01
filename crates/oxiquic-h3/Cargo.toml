@@ -1,0 +1,52 @@
+[package]
+name = "oxiquic-h3"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "OxiQUIC HTTP/3 bridge (M3+ feature placeholder)."
+categories = ["network-programming", "web-programming"]
+keywords = ["http3", "quic", "pure-rust", "cooljapan", "oxiquic"]
+
+[features]
+default = ["h3-compat"]
+h3-compat = ["oxiquic-transport/h3-compat", "dep:h3", "dep:bytes", "dep:http", "dep:rustls", "dep:tokio"]
+serde = ["dep:serde", "dep:serde_json"]
+tracing = ["dep:tracing"]
+
+[dependencies]
+oxiquic-core = { workspace = true }
+oxiquic-transport = { workspace = true }
+thiserror = { workspace = true }
+h3 = { workspace = true, optional = true }
+bytes = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+
+[dev-dependencies]
+oxitls-rcgen   = { workspace = true }
+tokio          = { workspace = true }
+rustls         = { workspace = true }
+oxiquic-crypto = { workspace = true }
+sha2           = { workspace = true }
+criterion      = { workspace = true }
+# H3 vs H2 comparison bench: raw hyper HTTP/2 server + client
+# (no oxihttp dep to avoid cross-workspace cycle)
+http-body-util = { workspace = true }
+hyper          = { workspace = true }
+hyper-util     = { workspace = true }
+tokio-rustls   = { workspace = true }
+
+[[bench]]
+name    = "h3_bench"
+harness = false
+
+[[bench]]
+name    = "h3_vs_h2"
+harness = false

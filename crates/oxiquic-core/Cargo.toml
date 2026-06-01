@@ -1,0 +1,30 @@
+[package]
+name = "oxiquic-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "OxiQUIC core types: error, StreamId, ConnectionStats."
+categories = ["network-programming", "asynchronous"]
+keywords = ["quic", "pure-rust", "cooljapan", "oxiquic"]
+
+[features]
+serde     = ["dep:serde", "smallvec/serde"]
+# Enable the From<oxitls_core::TlsError> for OxiQuicError conversion bridge.
+oxitls    = ["dep:oxitls-core"]
+
+[dependencies]
+thiserror  = { workspace = true }
+serde      = { workspace = true, optional = true }
+smallvec   = { workspace = true }
+oxitls-core = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest  = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name    = "core_ops"
+harness = false

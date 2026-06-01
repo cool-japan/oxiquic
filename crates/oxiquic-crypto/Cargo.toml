@@ -1,0 +1,36 @@
+[package]
+name = "oxiquic-crypto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "OxiQUIC crypto bridge: Pure-Rust rustls CryptoProvider over OxiCrypto with QUIC packet/header protection (RFC 9001), zero ring/aws-lc-rs"
+categories = ["cryptography", "network-programming"]
+keywords = ["quic", "rustls", "oxicrypto", "pure-rust", "cooljapan"]
+
+[features]
+# Enable the oxitls-facade-backed alternative CryptoProvider.
+# Exposes `oxiquic_crypto::oxitls_quic_provider()` — a pure-rustcrypto provider
+# sourced from oxitls rather than the bespoke oxiquic-crypto provider.
+# NOTE: the suites returned by this provider have `quic: None` (they come from
+# plain `rustls_rustcrypto::provider()`).  For actual QUIC packet-key derivation
+# use the default `quic_crypto_provider()` whose suites have `quic: Some(..)`.
+oxitls-provider = ["dep:oxitls"]
+
+[dependencies]
+oxicrypto = { workspace = true }
+rustls = { workspace = true }
+rustls-rustcrypto = { workspace = true }
+sha2 = { workspace = true }
+hmac = { workspace = true }
+zeroize = { workspace = true }
+aead = { workspace = true }
+aes-gcm = { workspace = true }
+chacha20poly1305 = { workspace = true }
+oxitls = { workspace = true, optional = true }
+
+[dev-dependencies]
+oxitls-rcgen = { workspace = true }
+rustls-pki-types = { workspace = true }

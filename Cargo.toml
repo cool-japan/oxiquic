@@ -1,0 +1,71 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/oxiquic-core",
+    "crates/oxiquic-crypto",
+    "crates/oxiquic-transport",
+    "crates/oxiquic-h3",
+    "crates/oxiquic",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["COOLJAPAN OU (Team Kitasan)"]
+license = "Apache-2.0"
+repository = "https://github.com/cool-japan/oxiquic"
+description = "OxiQUIC is the COOLJAPAN Pure-Rust QUIC transport (ring/aws-lc-rs-free)."
+
+[workspace.dependencies]
+oxiquic-core      = { path = "crates/oxiquic-core",      version = "0.1.0" }
+oxiquic-crypto    = { path = "crates/oxiquic-crypto",    version = "0.1.0" }
+oxiquic-transport = { path = "crates/oxiquic-transport", version = "0.1.0" }
+oxiquic-h3        = { path = "crates/oxiquic-h3",        version = "0.1.0" }
+
+# OxiCrypto — Pure-Rust crypto primitives (provides
+# HKDF-Expand-Label, AES single-block ECB, ChaCha20 keystream, AEADs, HMAC).
+oxicrypto         = { version = "0.1.0", default-features = false, features = ["pure", "std"] }
+# RustCrypto primitives used directly by the rustls trait impls in oxiquic-crypto
+# (same majors as oxicrypto pulls -> single resolved copy).
+sha2              = { version = "0.11.0", default-features = false }
+hmac              = { version = "0.13.0", default-features = false }
+zeroize           = { version = "1.8.2",  default-features = false }
+# AEAD ciphers + traits for QUIC packet protection (aead 0.5 chain, matching
+# oxicrypto-aead / rustls-rustcrypto so a single copy resolves).
+aead              = { version = "0.5.2",  default-features = false }
+aes-gcm           = { version = "0.10.3", default-features = false, features = ["aes"] }
+chacha20poly1305  = { version = "0.10.1", default-features = false }
+# oxitls-rcgen — Pure-Rust self-signed cert generation (dev-dependency only, for
+# the in-memory QUIC handshake test).
+oxitls-rcgen      = { version = "0.1.0" }
+# oxitls-core — Core TLS types (TlsError, etc.) used for the optional
+# From<TlsError> for OxiQuicError impl.
+oxitls-core       = { version = "0.1.0" }
+# oxitls — Optional TLS facade consumed by the oxitls-provider feature gate in
+# oxiquic-crypto.  default-features = false + quic-preview pulls in pure-rust
+# only; no ring/aws-lc-rs.
+oxitls            = { version = "0.1.0", default-features = false, features = ["quic-preview", "webpki-roots"] }
+# OxiQUIC builds its own Pure-Rust QUIC transport (oxiquic-transport) directly on
+# the rustls `quic` module driven by the oxiquic-crypto CryptoProvider, so neither
+# quinn nor quinn-proto is used: quinn-proto 0.11.x gates its rustls QUIC bridge
+# behind ring/aws-lc-rs and derives Initial keys via C crypto, which the COOLJAPAN
+# Pure-Rust policy forbids. The transport implements RFC 9000/9001/9002 in-house.
+rustls            = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+rustls-pki-types  = { version = "1" }
+rustls-rustcrypto = { version = "0.0.2-alpha" }
+bytes             = { version = "1" }
+h3                = { version = "0.0.8", features = ["i-implement-a-third-party-backend-and-opt-into-breaking-changes"] }
+tokio             = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync"] }
+thiserror         = { version = "2" }
+http              = { version = "1" }
+serde             = { version = "1", default-features = false, features = ["derive"] }
+serde_json        = { version = "1", default-features = false, features = ["std"] }
+smallvec          = { version = "1", features = ["union"] }
+proptest          = { version = "1" }
+criterion         = { version = "0.8.2", features = ["html_reports"] }
+http-body-util    = { version = "0.1" }
+hyper             = { version = "1.10", features = ["server", "client", "http2"] }
+hyper-util        = { version = "0.1",  features = ["tokio", "server", "server-auto"] }
+tokio-rustls      = { version = "0.26", default-features = false, features = ["tls12"] }
+tracing           = { version = "0.1", default-features = false, features = ["std"] }
