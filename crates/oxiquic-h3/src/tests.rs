@@ -283,6 +283,10 @@ async fn h3_get_roundtrip() {
             .await
             .expect("send response body");
         stream.finish().await.expect("finish response stream");
+        // Gracefully shut down the H3 connection so the client receives
+        // CONNECTION_CLOSE and its driver task exits cleanly instead of waiting
+        // for the QUIC idle-timeout (which races against the test deadline).
+        let _ = h3_conn.shutdown(0).await;
     });
 
     // ── Client ─────────────────────────────────────────────────────────────────

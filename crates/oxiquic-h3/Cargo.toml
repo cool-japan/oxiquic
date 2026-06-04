@@ -33,7 +33,7 @@ tracing = { workspace = true, optional = true }
 oxitls-rcgen   = { workspace = true }
 tokio          = { workspace = true }
 rustls         = { workspace = true }
-oxiquic-crypto = { workspace = true }
+oxiquic-crypto = { path = "../oxiquic-crypto" }
 sha2           = { workspace = true }
 criterion      = { workspace = true }
 # H3 vs H2 comparison bench: raw hyper HTTP/2 server + client

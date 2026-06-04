@@ -27,5 +27,5 @@ rustls             = { workspace = true, optional = true }
 [dev-dependencies]
 tokio          = { workspace = true, features = ["rt-multi-thread", "macros"] }
 oxitls-rcgen   = { workspace = true }
-oxiquic-crypto = { workspace = true }
+oxiquic-crypto = { path = "../oxiquic-crypto" }
 rustls         = { workspace = true }

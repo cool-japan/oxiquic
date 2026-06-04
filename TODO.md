@@ -1,13 +1,13 @@
 # OxiQUIC TODO
 
-## Status (updated 2026-06-01)
-**v0.1.0 release-ready — in-house Pure-Rust QUIC engine on rustls::quic**: OxiQUIC
+## Status (updated 2026-06-04)
+**v0.1.1 release-ready — in-house Pure-Rust QUIC engine on rustls::quic**: OxiQUIC
 built its own RFC 9000/9001/9002 stack directly on `rustls::quic` TLS 1.3 API
 (driven by the `oxiquic-crypto` provider) over `tokio` UDP. `cargo tree
 -p oxiquic-transport --edges normal` has NO ring/aws-lc-rs/openssl. ~22 000 SLOC
 across 5 crates, 321 unit+integration tests passing, zero clippy warnings,
 zero `unwrap()`/`panic!` in production code. FFI audit PASSED. CHANGELOG.md added.
-Workspace README updated to reflect v0.1.0 complete feature set.
+Workspace README updated to reflect v0.1.1 complete feature set.
 
 **5-crate workspace:**
 - **oxiquic-core** — COMPLETE: full RFC 9000 type system (StreamId/Initiator/
@@ -214,10 +214,19 @@ idle timeout, connection statistics.
   — `bench_stream_throughput_large` in `crates/oxiquic-transport/benches/transport.rs`
 - [x] Benchmark: multi-stream throughput at 50 concurrent streams (bench_multi_stream_concurrent_50; 100 deferred)
   — `bench_multi_stream_concurrent_50` in `crates/oxiquic-transport/benches/transport.rs`
-- [ ] Benchmark: HTTP/3 throughput vs HTTP/2 over TLS (latency comparison done via h3_vs_h2 bench; throughput comparison deferred — separate bench needed for sustained-load measurement)
+- [x] Benchmark: HTTP/3 throughput vs HTTP/2 over TLS (2026-06-03)
+  — `bench_h3_vs_h2_throughput` added to `crates/oxiquic-h3/benches/h3_vs_h2.rs`; sustained-load
+  comparison at 256 KiB and 1 MiB payloads (group `h3_vs_h2_throughput`); criterion
+  `Throughput::Bytes` annotation reports bytes/s; H3 and H2 each use a pre-established warm
+  connection to isolate handshake from payload delivery. Helpers: `do_h3_get_bytes`,
+  `do_h2_get_bytes` (body fully drained and byte-count verified per iteration).
 - [ ] Benchmark: congestion control comparison (Cubic vs BBR on simulated lossy network) (deferred — requires tc/netem or similar)
 - [x] Benchmark: connection migration overhead (path validation latency) — `migration.rs` added to `crates/oxiquic-transport/benches/`; 3 functions: `path_challenge_roundtrip`, `path_challenge_roundtrip_server_init`, `handshake_plus_migration` (2026-05-30)
-- [ ] Benchmark: memory usage per connection and per stream (deferred — allocator stats API needed)
+- [x] Benchmark: memory usage per connection and per stream (2026-06-03)
+  — `bench_memory_usage` added to `crates/oxiquic-transport/benches/transport.rs` (transport layer)
+  and `bench_h3_memory_profile` added to `crates/oxiquic-h3/benches/h3_bench.rs` (H3 layer);
+  both use RSS delta via Linux /proc/self/status and macOS mach_task_info to print per-connection
+  kB estimates at bench startup, plus criterion timing for connection setup rate.
 - [ ] Profile: CPU usage during high-throughput transfer (deferred — profiling tooling)
 - [x] Benchmark: QUIC vs TCP+TLS connection establishment time comparison (bench_tcp_tls_vs_quic_handshake added to transport.rs — 2026-05-30)
 

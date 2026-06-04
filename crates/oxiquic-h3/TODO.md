@@ -407,18 +407,19 @@ the round-trip paths.
   - Completed 2026-05-30 — `h3_vs_h2` bench added; H2 server uses raw hyper
     (no oxihttp dep to avoid cross-workspace cycle); 4 bench functions:
     h3_get/1kb, h3_get/64kb, h2_get/1kb, h2_get/64kb
-- [~] Profile memory usage per H3 connection and per active request stream
+- [x] Profile memory usage per H3 connection and per active request stream (2026-06-03)
   - Goal: Memory profile showing per-connection and per-stream heap overhead
-  - Design: Wave 4 — criterion bench in crates/oxiquic-h3/benches/
-  - Files: `crates/oxiquic-h3/benches/h3_bench.rs (new)`
-  - Tests: criterion bench
-  - Risk: Low
-- [~] Benchmark server push overhead vs client-initiated request for same resource
+  - Completed: `bench_h3_memory_profile` added to `crates/oxiquic-h3/benches/h3_bench.rs`;
+    measures RSS delta before/after holding N H3 connections (5 for baseline measurement);
+    prints per-connection kB estimate to stdout; criterion timing bench for N ∈ {1, 5}
+    H3 connections per iteration. RSS reader covers Linux + macOS; graceful fallback elsewhere.
+- [x] Benchmark server push overhead vs client-initiated request for same resource (2026-06-03)
   - Goal: Criterion bench comparing server-push delivery overhead vs equivalent client GET
-  - Design: Wave 4 — criterion bench in crates/oxiquic-h3/benches/
-  - Files: `crates/oxiquic-h3/benches/h3_bench.rs (new)`
-  - Tests: criterion bench
-  - Risk: Low
+  - Completed: `bench_h3_push_overhead` added to `crates/oxiquic-h3/benches/h3_bench.rs`;
+    group `h3_push_overhead` with two functions:
+    `client_get_1kb` (warm GET returning 1 KiB — baseline), and
+    `push_stub_noop` (request-construction work the caller does before push_promise returns
+    NotImplemented — documents the stub overhead of the h3 0.0.8 upstream limitation).
 
 ## Integration
 - [x] Depend on `oxiquic-transport` for QUIC connection establishment

@@ -22,8 +22,21 @@
 //!
 //! Each iteration measures one complete request-response round trip (connection
 //! pre-established outside the hot loop for warm-path measurements).
+//!
+//! ## Sustained throughput group
+//!
+//! - `h3_vs_h2_throughput/h3_256kb` — H3: transfer 256 KiB payload, report bytes/s
+//! - `h3_vs_h2_throughput/h3_1mb`   — H3: transfer 1 MiB payload, report bytes/s
+//! - `h3_vs_h2_throughput/h2_256kb` — H2: transfer 256 KiB payload, report bytes/s
+//! - `h3_vs_h2_throughput/h2_1mb`   — H2: transfer 1 MiB payload, report bytes/s
+//!
+//! The sustained-throughput group uses larger payloads than the latency group so
+//! it exercises the flow-control and congestion-window paths that a single small
+//! GET does not stress.  Both H3 and H2 use a single pre-established connection
+//! per `(protocol, size)` pair; each iteration transfers the full payload once.
 
 use std::convert::Infallible;
+use std::hint::black_box;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -365,8 +378,175 @@ fn bench_h3_vs_h2(c: &mut Criterion) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Sustained throughput: H3 vs H2 — larger payloads, measures bytes/s
+//
+// The latency bench (`bench_h3_vs_h2`) uses 1 KiB and 64 KiB payloads to
+// measure per-request round-trip latency.  This bench uses 256 KiB and 1 MiB
+// payloads to measure *sustained* throughput — i.e. how many bytes per second
+// each protocol can deliver on a single pre-established connection over loopback.
+//
+// The Throughput::Bytes annotation instructs criterion to compute and display
+// bytes/s automatically.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Issue one H3 GET that returns `body_size` bytes; drain all body bytes.
+/// Returns the number of bytes received.
+async fn do_h3_get_bytes(
+    send_req: &mut h3::client::SendRequest<oxiquic_transport::OxiQuicOpenStreams, Bytes>,
+    body_size: usize,
+) -> usize {
+    let req = Request::builder()
+        .method("GET")
+        .uri("https://localhost/data")
+        .body(())
+        .expect("build H3 GET throughput bench");
+    let mut stream = send_req
+        .send_request(req)
+        .await
+        .expect("H3 send_request throughput bench");
+    stream.finish().await.expect("H3 finish throughput bench");
+    let resp = stream
+        .recv_response()
+        .await
+        .expect("H3 recv_response throughput bench");
+    assert_eq!(resp.status(), StatusCode::OK);
+    let mut total = 0usize;
+    while let Some(chunk) = stream
+        .recv_data()
+        .await
+        .expect("H3 recv_data throughput bench")
+    {
+        use bytes::Buf as _;
+        total += chunk.remaining();
+    }
+    assert_eq!(
+        total, body_size,
+        "H3 throughput: received {} bytes, expected {}",
+        total, body_size
+    );
+    total
+}
+
+/// Issue one H2 GET that returns `body_size` bytes; drain all body bytes.
+/// Returns the number of bytes received.
+async fn do_h2_get_bytes(
+    send_req: &mut hyper::client::conn::http2::SendRequest<Empty<Bytes>>,
+    url: &str,
+    body_size: usize,
+) -> usize {
+    let uri: hyper::Uri = url.parse().expect("parse H2 throughput bench URI");
+    let req = hyper::Request::builder()
+        .method("GET")
+        .uri(uri)
+        .body(Empty::<Bytes>::new())
+        .expect("build H2 GET throughput bench");
+    let resp = send_req
+        .send_request(req)
+        .await
+        .expect("H2 send_request throughput bench");
+    assert_eq!(resp.status(), 200u16);
+    let mut body = resp.into_body();
+    let mut total = 0usize;
+    while let Some(frame) = body.frame().await {
+        if let Ok(f) = frame {
+            if let Ok(data) = f.into_data() {
+                total += data.len();
+            }
+        }
+    }
+    assert_eq!(
+        total, body_size,
+        "H2 throughput: received {} bytes, expected {}",
+        total, body_size
+    );
+    total
+}
+
+/// Benchmark: sustained throughput comparison of H3 vs H2.
+///
+/// Payload sizes: 256 KiB (`256kb`) and 1 MiB (`1mb`).  For each size, a
+/// long-lived server is spun up once outside `b.iter`, and a single
+/// pre-established connection is reused for every iteration — so each
+/// `b.iter` call transfers exactly one payload (no handshake cost).
+///
+/// `criterion::Throughput::Bytes` is set so criterion reports bytes/s.
+fn bench_h3_vs_h2_throughput(c: &mut Criterion) {
+    let mut group = c.benchmark_group("h3_vs_h2_throughput");
+    group.sample_size(10);
+    group.measurement_time(Duration::from_secs(90));
+
+    for &(size_label, body_size) in &[("256kb", 256 * 1024usize), ("1mb", 1024 * 1024usize)] {
+        group.throughput(Throughput::Bytes(body_size as u64));
+
+        // ── H3 sustained throughput ──────────────────────────────────────────
+
+        let h3_id = BenchmarkId::new("h3", size_label);
+        group.bench_with_input(h3_id, &body_size, |b, &body_size| {
+            let rt = make_runtime();
+
+            let (client_cfg, server_cfg, _cert_der) = config_pair();
+            let transport = TransportConfig::default();
+
+            let (server_addr, mut send_req) = rt.block_on(async {
+                let server_addr = spawn_h3_server(server_cfg, body_size).await;
+
+                let client_ep = ClientEndpoint::bind(loopback(), client_cfg, transport)
+                    .await
+                    .expect("bind H3 client for throughput bench");
+                let quic_conn = client_ep
+                    .connect(server_addr, "localhost")
+                    .await
+                    .expect("H3 client connect throughput bench");
+                let driven = quic_conn.into_driven();
+                let (_h3_conn, send_req) = connect_h3(driven)
+                    .await
+                    .expect("connect_h3 throughput bench");
+
+                (server_addr, send_req)
+            });
+
+            let _ = server_addr; // suppress unused warning
+
+            b.iter(|| {
+                rt.block_on(async {
+                    let n = do_h3_get_bytes(&mut send_req, body_size).await;
+                    black_box(n)
+                });
+            });
+        });
+
+        // ── H2 sustained throughput ──────────────────────────────────────────
+
+        let h2_id = BenchmarkId::new("h2", size_label);
+        group.bench_with_input(h2_id, &body_size, |b, &body_size| {
+            let rt = make_runtime();
+
+            let (_client_cfg, server_cfg, cert_der) = config_pair();
+            let h2_client_cfg = make_h2_client_cfg(&cert_der);
+
+            let (server_addr, mut send_req) = rt.block_on(async {
+                let server_addr = spawn_h2_server(server_cfg, body_size).await;
+                let send_req = connect_h2_client(h2_client_cfg, server_addr).await;
+                (server_addr, send_req)
+            });
+
+            let h2_url = format!("https://localhost:{}/data", server_addr.port());
+
+            b.iter(|| {
+                rt.block_on(async {
+                    let n = do_h2_get_bytes(&mut send_req, &h2_url, body_size).await;
+                    black_box(n)
+                });
+            });
+        });
+    }
+
+    group.finish();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Groups
 // ─────────────────────────────────────────────────────────────────────────────
 
-criterion_group!(h3_vs_h2_benches, bench_h3_vs_h2);
+criterion_group!(h3_vs_h2_benches, bench_h3_vs_h2, bench_h3_vs_h2_throughput);
 criterion_main!(h3_vs_h2_benches);

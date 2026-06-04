@@ -15,6 +15,7 @@
 //! - `bench_multi_stream_concurrent_50`    — 50 sequential bidi streams on one connection
 //! - `bench_connection_establishment_rate` — 10 sequential QUIC connects per iteration
 //! - `bench_tcp_tls_vs_quic_handshake`     — side-by-side QUIC 1-RTT vs TCP+TLS 1-RTT latency
+//! - `bench_memory_usage`                  — RSS delta per connection (1 and 10 connections)
 
 use std::hint::black_box;
 use std::net::{TcpListener, TcpStream};
@@ -949,6 +950,204 @@ fn bench_tcp_tls_vs_quic_handshake(c: &mut Criterion) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Memory usage per connection and per stream
+//
+// The standard allocator API does not expose per-allocation accounting, so we
+// use an approach that is portable and does not require nightly or a custom
+// allocator: measure the *process resident-set size (RSS)* before and after
+// establishing N connections to get a per-connection heap estimate, and
+// similarly for stream handles.
+//
+// On Linux, RSS is read from `/proc/self/status` (VmRSS field).
+// On macOS, it is read from `mach_task_self()` via `task_info`.
+// On all other platforms, the bench reports "0 KB (unsupported platform)" and
+// exits early — the bench still *compiles* and *runs* on every platform.
+//
+// The measurements are printed to stdout once per bench function so they appear
+// in `cargo bench` output alongside the criterion timing tables.  They are NOT
+// fed into criterion's statistical framework (RSS is too noisy for sub-µs
+// precision), but they give a useful order-of-magnitude baseline.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Read the process RSS in kilobytes, or `None` if unsupported / unavailable.
+fn rss_kb() -> Option<u64> {
+    #[cfg(target_os = "linux")]
+    {
+        let status = std::fs::read_to_string("/proc/self/status").ok()?;
+        for line in status.lines() {
+            if let Some(rest) = line.strip_prefix("VmRSS:") {
+                let kbs = rest.trim().trim_end_matches(" kB").trim();
+                return kbs.parse::<u64>().ok();
+            }
+        }
+        None
+    }
+    #[cfg(target_os = "macos")]
+    {
+        // SAFETY: `task_info` is a well-known macOS API; the struct is POD and
+        // the call is idiomatic.  This is the standard way to read process RSS
+        // on macOS without any additional crates.
+        use std::mem;
+        #[repr(C)]
+        #[allow(non_camel_case_types)]
+        struct mach_task_basic_info {
+            virtual_size: u64,
+            resident_size: u64,
+            resident_size_max: u64,
+            user_time: [i32; 2],
+            system_time: [i32; 2],
+            policy: i32,
+            suspend_count: i32,
+        }
+        const MACH_TASK_BASIC_INFO: i32 = 20;
+        extern "C" {
+            fn mach_task_self() -> u32;
+            fn task_info(
+                target_task: u32,
+                flavor: i32,
+                task_info_out: *mut mach_task_basic_info,
+                task_info_out_cnt: *mut u32,
+            ) -> i32;
+        }
+        let mut info: mach_task_basic_info = unsafe { mem::zeroed() };
+        let mut count = (mem::size_of::<mach_task_basic_info>() / mem::size_of::<u32>()) as u32;
+        let kr = unsafe {
+            task_info(
+                mach_task_self(),
+                MACH_TASK_BASIC_INFO,
+                &mut info,
+                &mut count,
+            )
+        };
+        if kr == 0 {
+            Some(info.resident_size / 1024)
+        } else {
+            None
+        }
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        None
+    }
+}
+
+/// Establish `n_connections` QUIC connections sequentially, drive each to the
+/// handshake-complete state, and collect all server-side `QuicConnection`
+/// objects so they stay alive for the RSS measurement.
+async fn hold_n_connections(n_connections: usize) -> Vec<oxiquic_transport::QuicConnection> {
+    let (client_cfg, server_cfg) = config_pair();
+    let transport = TransportConfig::default();
+
+    let server = ServerEndpoint::bind(loopback(), server_cfg, transport.clone())
+        .await
+        .expect("bind server for memory bench");
+    let server_addr = server.local_addr().expect("server local addr memory bench");
+
+    // Accept loop in background — store accepted connections so they aren't dropped.
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    tokio::spawn(async move {
+        for _ in 0..n_connections {
+            let conn = server.accept().await.expect("server accept memory bench");
+            let _ = tx.send(conn);
+        }
+    });
+
+    let mut client_conns = Vec::with_capacity(n_connections);
+    for _ in 0..n_connections {
+        let client = ClientEndpoint::bind(loopback(), Arc::clone(&client_cfg), transport.clone())
+            .await
+            .expect("bind client memory bench");
+        let conn = client
+            .connect(server_addr, "localhost")
+            .await
+            .expect("client connect memory bench");
+        client_conns.push(conn);
+    }
+
+    // Drain server-side connections to keep them alive.
+    let mut server_conns = Vec::with_capacity(n_connections);
+    for _ in 0..n_connections {
+        let conn = rx
+            .recv()
+            .await
+            .expect("server conn channel recv memory bench");
+        server_conns.push(conn);
+    }
+
+    // Return only client-side connections (server-side dropped here).
+    client_conns
+}
+
+/// Benchmark: memory usage per QUIC connection and per active bidi stream.
+///
+/// This bench does NOT feed RSS deltas into criterion's timing statistics
+/// (RSS is too coarse for that).  Instead, it:
+///
+/// 1. Prints the per-connection RSS estimate to stdout so it is visible in
+///    `cargo bench` output — similar to how the QPACK bench prints the
+///    compression ratio.
+/// 2. Uses criterion's `bench_function` to measure the *time* to establish N
+///    connections (N ∈ {1, 10}) so the bench contributes a useful timing datum
+///    alongside the memory note.
+fn bench_memory_usage(c: &mut Criterion) {
+    let rt = make_runtime();
+
+    // ── One-time RSS measurement (outside criterion hot loop) ────────────────
+    //
+    // Establish a baseline (no connections), then hold 10 connections and
+    // measure the delta.  Done once so the numbers appear at bench startup.
+
+    let baseline_rss = rss_kb();
+
+    let held = rt.block_on(hold_n_connections(10));
+    let after_10_rss = rss_kb();
+    drop(held);
+
+    let per_conn_kb = match (baseline_rss, after_10_rss) {
+        (Some(b), Some(a)) if a > b => {
+            let delta = a - b;
+            println!(
+                "\n[memory_per_connection]  baseline={b} kB  \
+                 after_10_conns={a} kB  delta={delta} kB  \
+                 per_connection≈{} kB",
+                delta / 10
+            );
+            delta / 10
+        }
+        _ => {
+            println!(
+                "\n[memory_per_connection]  RSS measurement unavailable on this platform — \
+                 timing-only bench will run."
+            );
+            0
+        }
+    };
+    let _ = per_conn_kb; // used for print only
+
+    // ── criterion timing bench — N connections per iteration ─────────────────
+
+    let mut group = c.benchmark_group("memory_usage");
+    group.sample_size(10);
+    group.measurement_time(Duration::from_secs(30));
+
+    for &n in &[1usize, 10usize] {
+        group.bench_with_input(
+            BenchmarkId::new("establish_n_connections", n),
+            &n,
+            |b, &n| {
+                let rt = make_runtime();
+                b.iter(|| {
+                    let conns = rt.block_on(hold_n_connections(n));
+                    black_box(conns.len())
+                });
+            },
+        );
+    }
+
+    group.finish();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Groups
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -963,6 +1162,7 @@ criterion_group!(
     bench_multi_stream_concurrent_50,
     bench_connection_establishment_rate,
     bench_tcp_tls_vs_quic_handshake,
+    bench_memory_usage,
 );
 
 criterion_main!(transport_benches);

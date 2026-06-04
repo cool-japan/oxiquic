@@ -6,6 +6,7 @@
 //! [`super::QuicConnection::into_driven`].
 
 use std::collections::HashMap;
+use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -303,6 +304,10 @@ pub(super) async fn run_driven_connection(
             result = recv_inbound(&mut inbound, &mut recv_buf) => {
                 let (owned, _from) = match result {
                     Ok(v) => v,
+                    // ICMP port-unreachable: peer closed its socket (e.g. server
+                    // dropped before sending CONNECTION_CLOSE).  Not fatal for
+                    // QUIC — the loss-detection timer will handle it; keep running.
+                    Err(ref e) if e.kind() == io::ErrorKind::ConnectionRefused => continue,
                     Err(_) => break,
                 };
                 let mut datagram = owned;

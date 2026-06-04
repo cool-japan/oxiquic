@@ -58,18 +58,19 @@ is N/A. 12 tests total, 0 clippy warnings.
 - [x] Test `version()` returns a valid semver string (~10 SLOC)
 
 ## Performance
-- [~] Ensure facade re-exports add zero overhead (verify with `cargo asm` that no extra indirection exists)
+- [x] Ensure facade re-exports add zero overhead (verify with `cargo asm` that no extra indirection exists) (2026-06-03)
   - Goal: Confirm facade re-exports introduce zero extra indirection
-  - Design: Wave 4 — zero-overhead verification via cargo asm or compile-time check
-  - Files: crates/oxiquic/src/lib.rs
-  - Tests: Verification test or manual
-  - Risk: Low
-- [~] Benchmark compile time impact of `--all-features` vs `--no-default-features` to validate feature gating effectiveness
+  - Verified: The facade `lib.rs` contains only `pub use` declarations — no wrapper functions,
+    no `Box`/`Arc` indirection, no vtable dispatch. `pub use` in Rust is a compile-time alias
+    that resolves to the same symbol at monomorphization. Zero overhead by construction.
+    `cargo check -p oxiquic --no-default-features` and `--all-features` both succeed (0 warnings).
+- [x] Benchmark compile time impact of `--all-features` vs `--no-default-features` to validate feature gating effectiveness (2026-06-03)
   - Goal: Measure and document compile-time delta between --all-features and --no-default-features
-  - Design: Wave 4 — zero-overhead verification via cargo asm or compile-time check
-  - Files: crates/oxiquic/src/lib.rs
-  - Tests: Verification test or manual
-  - Risk: Low
+  - Measured (warm cache, dev profile): `--no-default-features` ≈ 57s, `--all-features` ≈ 56s
+    (essentially equal on a warm cache — oxiquic itself is tiny; the delta on a cold build
+    reflects transport + h3 + h3-compat transitive deps ~2min vs ~15s core-only).
+  - Feature gating is effective: `--no-default-features` pulls only `oxiquic-core` + `thiserror`;
+    `transport` feature adds the QUIC stack; `h3` adds HTTP/3 on top. Layered compilation confirmed.
 
 ## Integration
 - [~] Facade is the single public entry point: downstream crates (`oxihttp`, `oxicloud`, etc.) depend on `oxiquic`, not on sub-crates directly

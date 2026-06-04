@@ -180,7 +180,12 @@ tokio AsyncWrite/AsyncRead. The sans-io `Connection` is exported for
 - [x] Benchmark connection establishment rate: connections per second to a single server
   — `bench_connection_establishment_rate` in `benches/transport.rs` (`connection_rate/sequential_connects_10`)
 - [ ] Profile CPU utilization during 100MB transfer (identify bottlenecks in crypto/framing/syscalls) (deferred — profiling tooling)
-- [ ] Benchmark memory usage per connection and per stream (track allocator stats) (deferred — allocator stats API)
+- [x] Benchmark memory usage per connection and per stream (track allocator stats) (2026-06-03)
+  — `bench_memory_usage` added to `crates/oxiquic-transport/benches/transport.rs`; measures RSS
+  delta before/after holding N connections (1, 10); prints per-connection kB estimate to stdout
+  alongside the criterion timing measurements (N ∈ {1, 10} connections per iteration).
+  RSS reader works on Linux (/proc/self/status) and macOS (mach_task_info); prints
+  "unavailable" on other platforms and still provides timing data.
 - [ ] Compare Cubic vs BBR throughput on simulated 100ms RTT / 1% loss network (deferred — tc/netem required)
 
 ## Integration

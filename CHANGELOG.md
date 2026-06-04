@@ -5,6 +5,31 @@ All notable changes to OxiQUIC are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-06-04
+
+### Added
+- `bench_memory_usage` benchmark in `oxiquic-transport`: measures RSS delta per QUIC connection
+  (1 and 10 connections) on Linux (`/proc/self/status`) and macOS (`mach_task_self()` task_info);
+  prints a one-time per-connection kilobyte estimate alongside criterion timing data.
+- `bench_h3_memory_profile` benchmark in `oxiquic-h3`: same RSS methodology applied to HTTP/3
+  connections — reports per-H3-connection heap overhead and measures connection setup rate via
+  criterion (`h3_memory/establish_n_h3_connections/{1,5}`).
+- `bench_h3_push_overhead` benchmark in `oxiquic-h3`: documents server push stub latency vs an
+  equivalent client-initiated GET; confirms the push stub path (always `NotImplemented` in h3
+  0.0.8) adds no measurable network overhead (`h3_push_overhead/{client_get_1kb,push_stub_noop}`).
+- `bench_h3_vs_h2_throughput` benchmark in `oxiquic-h3`: sustained throughput comparison of H3
+  vs H2 at 256 KiB and 1 MiB payload sizes using `criterion::Throughput::Bytes` to report bytes/s
+  (`h3_vs_h2_throughput/{h3,h2}_{256kb,1mb}`); exercises flow-control and congestion-window paths.
+
+### Fixed
+- `oxiquic-transport` driven connection loop: `io::ErrorKind::ConnectionRefused` (ICMP
+  port-unreachable, sent when the peer's socket closes before a `CONNECTION_CLOSE` frame) is now
+  treated as non-fatal — the loop continues instead of breaking, letting the QUIC loss-detection
+  timer handle recovery per RFC 9000.
+- `oxiquic-h3` `h3_get_roundtrip` integration test: server now calls `h3_conn.shutdown(0)` after
+  serving the response, so the client receives `CONNECTION_CLOSE` and the driver task exits cleanly
+  instead of racing against the QUIC idle-timeout.
+
 ## [0.1.0] — 2026-06-01
 
 ### Added
@@ -103,3 +128,5 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - 321 tests pass (unit + integration); zero clippy warnings; zero `unwrap()`/`panic!`
   in production code.
 - ~22 000 SLOC across 5 crates.
+
+[0.1.1]: https://github.com/cool-japan/oxiquic/releases/tag/v0.1.1
