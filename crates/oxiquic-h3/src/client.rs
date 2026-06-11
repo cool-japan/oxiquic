@@ -30,12 +30,20 @@ use oxiquic_transport::{H3BidiStream, OxiQuicH3Connection, OxiQuicOpenStreams};
 /// [`put`][H3Client::put], or [`delete`][H3Client::delete], and call
 /// [`close`][H3Client::close] when done.
 pub struct H3Client {
-    h3_conn: h3::client::Connection<OxiQuicH3Connection, Bytes>,
+    conn_driver: Option<tokio::task::JoinHandle<()>>,
     send_req: h3::client::SendRequest<OxiQuicOpenStreams, Bytes>,
     /// Default headers merged into every outgoing request.
     default_headers: Vec<(String, String)>,
     /// The locally-configured HTTP/3 settings (what we sent in our SETTINGS frame).
     local_settings: H3Settings,
+}
+
+impl Drop for H3Client {
+    fn drop(&mut self) {
+        if let Some(handle) = self.conn_driver.take() {
+            handle.abort();
+        }
+    }
 }
 
 impl H3Client {
@@ -71,17 +79,25 @@ impl H3Client {
         let conn = OxiQuicH3Connection::new(driven);
         let mut builder = h3::client::builder();
         builder.max_field_section_size(max_field_section_size);
-        let (h3_conn, send_req) = builder
+        let (mut h3_conn, send_req) = builder
             .build(conn)
             .await
             .map_err(|e| H3Error::Connection(e.to_string()))?;
+        // h3 requires Connection::poll_close() to be driven continuously so
+        // that control-stream frames (SETTINGS, GOAWAY) and server push are
+        // processed.  Spawn a background task that owns h3_conn and drives it
+        // until the connection closes.  The task is aborted when H3Client is
+        // dropped or close() is called.
+        let conn_driver = tokio::spawn(async move {
+            let _ = std::future::poll_fn(|cx| h3_conn.poll_close(cx)).await;
+        });
         let local_settings = H3Settings {
             max_field_section_size,
             qpack_max_table_capacity: 0,
             qpack_blocked_streams: 0,
         };
         Ok(Self {
-            h3_conn,
+            conn_driver: Some(conn_driver),
             send_req,
             default_headers,
             local_settings,
@@ -315,10 +331,10 @@ impl H3Client {
     ///
     /// Returns [`H3Error`] if the shutdown fails.
     pub async fn close(mut self) -> Result<(), H3Error> {
-        self.h3_conn
-            .shutdown(0)
-            .await
-            .map_err(|e| H3Error::Connection(e.to_string()))
+        if let Some(handle) = self.conn_driver.take() {
+            handle.abort();
+        }
+        Ok(())
     }
 }
 

@@ -42,6 +42,13 @@ pub use oxiquic_core::{
     QuicVersion, StreamId, TransportErrorCode, TransportParams,
 };
 
+/// Well-known ALPN protocol identifiers and the [`alpn::protocols`] builder
+/// helper. Use these constants when configuring raw QUIC connections with custom
+/// application protocols.
+pub mod alpn {
+    pub use oxiquic_core::alpn::{protocols, H3, HTTP_0_9};
+}
+
 #[cfg_attr(docsrs, doc(cfg(feature = "transport")))]
 #[cfg(feature = "transport")]
 pub use oxiquic_transport::{
@@ -246,6 +253,101 @@ pub async fn listen(
         .with_no_client_auth()
         .with_single_cert(cert_chain, private_key)
         .map_err(|e| OxiQuicError::Tls(e.to_string()))?;
+    ServerEndpoint::bind(addr, Arc::new(server_cfg), TransportConfig::default()).await
+}
+
+/// Connect to a QUIC server, advertising custom ALPN protocol identifiers.
+///
+/// Like [`connect`], but populates `alpn_protocols` on the client TLS config
+/// before performing the handshake. After a successful connection,
+/// [`QuicConnection::negotiated_alpn`] returns the protocol selected by the
+/// server (or `None` if the server did not negotiate ALPN).
+///
+/// Use [`alpn::protocols`] to build the list from byte-string literals, or the
+/// constants [`alpn::H3`] / [`alpn::HTTP_0_9`] for well-known identifiers.
+///
+/// # Errors
+/// Returns [`OxiQuicError`] on socket bind failure, TLS config error, or
+/// handshake failure.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use oxiquic::{alpn, connect_with_alpn};
+///
+/// let conn = connect_with_alpn(addr, "example.com", &[b"my-proto/1.0"]).await?;
+/// assert_eq!(conn.negotiated_alpn().as_deref(), Some(b"my-proto/1.0".as_slice()));
+/// ```
+#[cfg_attr(docsrs, doc(cfg(feature = "transport")))]
+#[cfg(feature = "transport")]
+pub async fn connect_with_alpn(
+    addr: std::net::SocketAddr,
+    server_name: &str,
+    protocols: &[&[u8]],
+) -> Result<QuicConnection, OxiQuicError> {
+    use std::sync::Arc;
+
+    use rustls::version::TLS13;
+    use rustls::ClientConfig;
+
+    let provider = Arc::new(oxiquic_crypto::quic_crypto_provider());
+    let roots = oxitls::webpki_root_certs();
+    let mut client_cfg = ClientConfig::builder_with_provider(provider)
+        .with_protocol_versions(&[&TLS13])
+        .map_err(|e| OxiQuicError::Tls(e.to_string()))?
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    client_cfg.alpn_protocols = protocols.iter().map(|p| p.to_vec()).collect();
+
+    let bind_addr = std::net::SocketAddr::from(([0, 0, 0, 0], 0));
+    let endpoint =
+        ClientEndpoint::bind(bind_addr, Arc::new(client_cfg), TransportConfig::default()).await?;
+    endpoint.connect(addr, server_name).await
+}
+
+/// Start a QUIC server bound to `addr`, advertising custom ALPN protocol identifiers.
+///
+/// Like [`listen`], but populates `alpn_protocols` on the server TLS config
+/// before binding the endpoint. Once a client connects, the TLS handshake
+/// negotiates one of the advertised protocols and the result is accessible via
+/// [`QuicConnection::negotiated_alpn`].
+///
+/// Use [`alpn::protocols`] to build the list from byte-string literals, or the
+/// constants [`alpn::H3`] / [`alpn::HTTP_0_9`] for well-known identifiers.
+///
+/// # Errors
+/// Returns [`OxiQuicError`] on socket bind failure or TLS configuration error.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use oxiquic::{alpn, listen_with_alpn};
+///
+/// let server = listen_with_alpn(addr, cert_chain, private_key, &[b"my-proto/1.0"]).await?;
+/// let conn = server.accept().await?;
+/// assert_eq!(conn.negotiated_alpn().as_deref(), Some(b"my-proto/1.0".as_slice()));
+/// ```
+#[cfg_attr(docsrs, doc(cfg(feature = "transport")))]
+#[cfg(feature = "transport")]
+pub async fn listen_with_alpn(
+    addr: std::net::SocketAddr,
+    cert_chain: Vec<rustls::pki_types::CertificateDer<'static>>,
+    private_key: rustls::pki_types::PrivateKeyDer<'static>,
+    protocols: &[&[u8]],
+) -> Result<ServerEndpoint, OxiQuicError> {
+    use std::sync::Arc;
+
+    use rustls::version::TLS13;
+    use rustls::ServerConfig;
+
+    let provider = Arc::new(oxiquic_crypto::quic_crypto_provider());
+    let mut server_cfg = ServerConfig::builder_with_provider(provider)
+        .with_protocol_versions(&[&TLS13])
+        .map_err(|e| OxiQuicError::Tls(e.to_string()))?
+        .with_no_client_auth()
+        .with_single_cert(cert_chain, private_key)
+        .map_err(|e| OxiQuicError::Tls(e.to_string()))?;
+    server_cfg.alpn_protocols = protocols.iter().map(|p| p.to_vec()).collect();
     ServerEndpoint::bind(addr, Arc::new(server_cfg), TransportConfig::default()).await
 }
 

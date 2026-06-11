@@ -1,13 +1,14 @@
 # OxiQUIC TODO
 
-## Status (updated 2026-06-04)
-**v0.1.1 release-ready — in-house Pure-Rust QUIC engine on rustls::quic**: OxiQUIC
+## Status (updated 2026-06-10)
+**v0.1.2 released 2026-06-10 — in-house Pure-Rust QUIC engine on rustls::quic**: OxiQUIC
 built its own RFC 9000/9001/9002 stack directly on `rustls::quic` TLS 1.3 API
 (driven by the `oxiquic-crypto` provider) over `tokio` UDP. `cargo tree
 -p oxiquic-transport --edges normal` has NO ring/aws-lc-rs/openssl. ~22 000 SLOC
-across 5 crates, 321 unit+integration tests passing, zero clippy warnings,
-zero `unwrap()`/`panic!` in production code. FFI audit PASSED. CHANGELOG.md added.
-Workspace README updated to reflect v0.1.1 complete feature set.
+across 5 crates, 329 unit+integration tests passing, zero clippy warnings,
+zero `unwrap()`/`panic!` in production code. FFI audit PASSED.
+ALPN negotiation support added: `alpn` constants module, `connect_with_alpn()`,
+`listen_with_alpn()`, `ServerEndpointBuilder::with_alpn_protocols()`.
 
 **5-crate workspace:**
 - **oxiquic-core** — COMPLETE: full RFC 9000 type system (StreamId/Initiator/
@@ -18,8 +19,8 @@ Workspace README updated to reflect v0.1.1 complete feature set.
 - **oxiquic-transport** — COMPLETE through M1-M5 milestones (handshake,
   1-RTT, streams, close, RFC 9002 loss detection, NewReno + BBR v2 congestion,
   connection + stream flow control). Facade connect()/listen() WIP.
-- **oxiquic-h3** — HTTP/3 message + error model complete; H3 client/server I/O
-  deferred.
+- **oxiquic-h3** — COMPLETE: HTTP/3 client (H3Client, H3ClientBuilder) and server
+  (H3Server, H3ServerBuilder, H3RequestContext, H3Responder) fully implemented.
 - **oxiquic** — facade: re-exports, prelude/h3_prelude, version()/quic_version().
 
 **Implemented (as of 2026-05-26):** Version negotiation (server sends VN packet,
@@ -30,14 +31,14 @@ address promotion), multi-connection server demux (DCID-based routing),
 AsyncWrite/AsyncRead stream handles, facade connect()/listen(), keep-alive PING,
 idle timeout, connection statistics.
 
-**Deferred (not yet implemented):** 0-RTT; RESET_STREAM/STOP_SENDING end-to-end (framing plumbed, user-facing API stubs remain); H3ClientBuilder/H3ServerBuilder (full builder with TLS setup); server push; ALPN enforcement at HTTP/3 layer.
+**Deferred (not yet implemented):** RESET_STREAM/STOP_SENDING end-to-end (framing plumbed, user-facing API stubs remain); server push (upstream-limited: h3 0.0.8 has no push API); Multipath QUIC.
 
 ## Actual Subcrate Structure (5 crates)
 
 - **oxiquic-core** -- Error types (`OxiQuicError`), connection/stream ID newtypes, `ConnectionStats`, frame type enums, transport parameter types. Foundation shared by all other crates. COMPLETE.
 - **oxiquic-crypto** -- Pure-Rust QUIC crypto provider for rustls (AEAD/header-protection, Initial key derivation). No ring/aws-lc-rs. COMPLETE.
 - **oxiquic-transport** -- In-house RFC 9000/9001/9002 QUIC stack on `rustls::quic` + tokio UDP. `ClientEndpoint`, `ServerEndpoint`, `QuicConnection`, `DrivenConnection`, `SendStreamHandle` (AsyncWrite), `RecvStreamHandle` (AsyncRead). M1–M6 complete. The bulk of the implementation.
-- **oxiquic-h3** -- HTTP/3 message and error model complete (`H3Error`, `H3ErrorCode`, `H3Request`, `H3Response`, `H3Settings`); H3 client/server I/O deferred pending wiring over oxiquic-transport streams.
+- **oxiquic-h3** -- COMPLETE: Full HTTP/3 client (`H3Client`, `H3ClientBuilder`, `RequestStream`) and server (`H3Server`, `H3ServerBuilder`, `H3ServerEndpoint`, `H3RequestContext`, `H3Responder`, `H3Incoming`), HTTP/3 message model (`H3Request`, `H3Response`, `H3Settings`), connection pooling (`H3Pool`), push stub, and all feature gates (`serde`, `tracing`).
 - **oxiquic** (facade) -- Unified re-export crate with feature flags: `default = ["transport"]`, optional `h3`, `dangerous`. Convenience functions (`connect`, `listen`, `connect_insecure`) and prelude.
 
 ## Core Implementation
@@ -235,7 +236,7 @@ idle timeout, connection statistics.
   — `oxitls_rcgen::generate_self_signed_ed25519` used in every integration test and all bench files (2026-05-30 confirmed)
 - [x] Wire oxitls OxiTicketer for QUIC 0-RTT session ticket encryption (Completed 2026-05-30 — `with_ticketer(Arc<dyn ProducesTickets>)` added to `ServerEndpointBuilder` and `H3ServerBuilder`; callers can plug in `oxitls::OxiTicketer` directly)
 - [x] Wire into oxihttp `h3` feature flag for HTTP/3 client and server — oxihttp-client and oxihttp-server both declare `oxiquic-h3` as optional dep under their `h3` feature; oxihttp facade re-exports under `h3` feature (confirmed 2026-05-30)
-- [ ] Coordinate ALPN with oxitls: `h3` for HTTP/3, custom protocols for raw QUIC (blocked: external coordination with oxitls)
+- [x] Coordinate ALPN with oxitls: `h3` for HTTP/3, custom protocols for raw QUIC — implemented 2026-06-10: `alpn` constants module in `oxiquic-core`, `ServerEndpointBuilder::with_alpn_protocols`, `connect_with_alpn` / `listen_with_alpn` facade helpers, `QuicConnection::negotiated_alpn()` accessor, 3 integration tests
 - [ ] Coordinate TransportConfig with oxihttp-server for HTTP/3 server settings (blocked: external coordination with oxihttp-server)
 - [x] Ensure deny.toml bans match oxitls and oxihttp ban lists
 - [ ] Add oxiquic-bench crate (M5): criterion benchmarks with aws-lc-rs dev-dep comparison (deferred: new subcrate scope — H3 and transport benches in-crate cover core scenarios)

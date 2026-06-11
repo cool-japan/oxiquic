@@ -28,6 +28,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod alpn;
 mod connection_id;
 mod error;
 mod frame;

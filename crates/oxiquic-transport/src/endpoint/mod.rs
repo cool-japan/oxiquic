@@ -417,6 +417,35 @@ impl ServerEndpointBuilder {
         self
     }
 
+    /// Set the ALPN protocol identifiers advertised in the TLS handshake.
+    ///
+    /// Replaces `alpn_protocols` on the underlying [`rustls::ServerConfig`]
+    /// immediately. Call before [`build`][Self::build] to negotiate custom
+    /// protocols on raw QUIC server endpoints.
+    ///
+    /// For HTTP/3 servers, prefer `H3ServerBuilder::with_tls_config` which
+    /// automatically injects `b"h3"`. See [`oxiquic_core::alpn`] for well-known
+    /// protocol constants.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use std::sync::Arc;
+    /// use oxiquic_transport::{ServerEndpointBuilder, TransportConfig};
+    ///
+    /// let server = ServerEndpointBuilder::new(addr, config, TransportConfig::default())
+    ///     .with_alpn_protocols(&[b"my-proto/1.0"])
+    ///     .build()
+    ///     .await?;
+    /// ```
+    #[must_use]
+    pub fn with_alpn_protocols(mut self, protocols: &[&[u8]]) -> Self {
+        let mut cfg = (*self.config).clone();
+        cfg.alpn_protocols = protocols.iter().map(|p| p.to_vec()).collect();
+        self.config = Arc::new(cfg);
+        self
+    }
+
     /// Bind the [`ServerEndpoint`], applying the ticketer (if set) to the TLS
     /// configuration before binding the UDP socket.
     ///

@@ -1056,6 +1056,9 @@ async fn h3_response_status_codes() {
                 .expect("Some(ctx)");
             let resp = H3Response::new(s).with_header("x-status", s.to_string());
             ctx.respond(resp).await.expect("respond");
+            // Graceful shutdown: send GOAWAY so the client receives CONNECTION_CLOSE
+            // and the driver task exits cleanly before the server task drops it.
+            let _ = h3_server.shutdown(0).await;
         });
 
         let client_ep = ClientEndpoint::bind(loopback, client_cfg, transport)

@@ -24,7 +24,9 @@ driven by the `oxiquic-crypto` Pure-Rust crypto provider over `tokio` UDP —
   Full client (`H3ClientBuilder`) and server (`H3ServerBuilder`) implementations.
 - **Type-safe stream API**: `BiStream`, `UniSendStream` (AsyncWrite), `UniRecvStream`
   (AsyncRead) with independent flow control.
-- **321 tests** (unit + integration), zero clippy warnings, zero `unwrap()`/`panic!`
+- **ALPN negotiation**: `connect_with_alpn()` / `listen_with_alpn()` facade helpers,
+  `ServerEndpointBuilder::with_alpn_protocols()`, and well-known constants in `oxiquic::alpn`.
+- **329 tests** (unit + integration), zero clippy warnings, zero `unwrap()`/`panic!`
   in production code, ~22 000 SLOC.
 
 ## Crates
@@ -128,7 +130,7 @@ openssl, and openssl-sys tree-wide.
 | M4 | COMPLETE | HTTP/3 server, H3ServerBuilder, H3Responder, graceful shutdown |
 | M5 | COMPLETE | 0-RTT, stateless retry, version negotiation, key update, connection migration, MTU discovery, keep-alive, connection statistics |
 
-## Implementation Status (2026-06-04)
+## Implementation Status (v0.1.2, 2026-06-10)
 
 **Implemented:**
 - QUIC 1-RTT handshake over Pure-Rust TLS 1.3 (oxiquic-crypto provider)
@@ -145,6 +147,8 @@ openssl, and openssl-sys tree-wide.
 - MTU discovery: DPLPMTUD (RFC 8899) binary-search probe
 - AsyncWrite/AsyncRead stream handles (BiStream, UniSendStream, UniRecvStream)
 - HTTP/3 client and server via `h3` crate
+- ALPN negotiation: `connect_with_alpn()` / `listen_with_alpn()` facade helpers,
+  `ServerEndpointBuilder::with_alpn_protocols()`, `oxiquic::alpn` constants module
 - ALPN enforcement at HTTP/3 layer (`h3`)
 - Streaming request/response bodies over HTTP/3 DATA frames
 - GOAWAY graceful shutdown
@@ -155,7 +159,6 @@ openssl, and openssl-sys tree-wide.
 - RESET_STREAM/STOP_SENDING end-to-end user API (framing complete; user-facing stubs remain)
 - H3 server push (upstream-limited: h3 0.0.8 has no push API)
 - Multipath QUIC
-- HTTP/3 throughput benchmark vs HTTP/2 (latency comparison done; sustained-load deferred)
 
 ## License
 

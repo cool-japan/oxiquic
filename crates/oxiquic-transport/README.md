@@ -20,8 +20,8 @@ bidirectional streams and reading/writing data. The crate is
 
 ```toml
 [dependencies]
-oxiquic-transport = "0.1.0"
-oxiquic-crypto    = "0.1.0"  # provides quic_crypto_provider()
+oxiquic-transport = "0.1.1"
+oxiquic-crypto    = "0.1.1"  # provides quic_crypto_provider()
 rustls            = "0.23"
 tokio             = { version = "1", features = ["full"] }
 ```
@@ -30,10 +30,10 @@ tokio             = { version = "1", features = ["full"] }
 
 ```toml
 # h3 adapter types (implements the `h3` crate's quic traits over OxiQUIC)
-oxiquic-transport = { version = "0.1.0", features = ["h3-compat"] }
+oxiquic-transport = { version = "0.1.1", features = ["h3-compat"] }
 
 # connect_insecure-style helpers for dev/testing
-oxiquic-transport = { version = "0.1.0", features = ["dangerous"] }
+oxiquic-transport = { version = "0.1.1", features = ["dangerous"] }
 ```
 
 ## Quick Start

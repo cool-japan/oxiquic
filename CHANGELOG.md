@@ -5,6 +5,48 @@ All notable changes to OxiQUIC are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] - 2026-06-10
+
+### Added
+
+#### oxiquic-core
+- `alpn` module: well-known ALPN protocol byte-string constants (`H3 = b"h3"`,
+  `HTTP_0_9 = b"hq-interop"`) and the `alpn::protocols(&[&[u8]]) -> Vec<Vec<u8>>`
+  builder helper for constructing owned ALPN lists from byte-string slices.
+  Re-exported from the `oxiquic` facade as `oxiquic::alpn::{H3, HTTP_0_9, protocols}`.
+
+#### oxiquic-transport
+- `ServerEndpointBuilder::with_alpn_protocols(&[&[u8]]) -> Self` builder method:
+  replaces `alpn_protocols` on the underlying `rustls::ServerConfig`, enabling
+  ALPN negotiation on raw QUIC server endpoints without rebuilding the TLS config.
+  Supersedes the `config_pair_with_alpn` test-only workaround used previously.
+
+#### oxiquic (facade)
+- `connect_with_alpn(addr, server_name, protocols)` convenience function: like
+  `connect()` but sets `alpn_protocols` on the client TLS config before performing
+  the handshake. After a successful connection, `QuicConnection::negotiated_alpn()`
+  returns the protocol selected by the server.
+- `listen_with_alpn(addr, cert_chain, private_key, protocols)` convenience function:
+  like `listen()` but injects custom `alpn_protocols` into the server TLS config
+  before binding the endpoint.
+- `alpn` re-export module exposed at the crate root.
+
+### Testing
+- 3 new integration tests in `oxiquic-transport/tests/alpn.rs`:
+  - `custom_alpn_roundtrip`: both sides advertise the same custom ALPN identifier;
+    after the handshake `negotiated_alpn()` returns the identifier on both endpoints.
+  - `alpn_not_set_does_not_panic`: no ALPN configured → handshake succeeds, both
+    sides return `None` from `negotiated_alpn()`.
+  - `server_endpoint_builder_with_alpn_protocols`: `ServerEndpointBuilder::with_alpn_protocols`
+    correctly overrides ALPN configured at construction time; client sees the negotiated protocol.
+- Total tests: 329 (unit + integration), all passing.
+
+### Fixed
+- `oxiquic-h3` `h3_response_status_codes` test: server task now calls
+  `h3_server.shutdown(0)` after sending the response, so the driver task exits
+  cleanly and the client receives `CONNECTION_CLOSE` before the server drops.
+  Matches the pattern applied to `h3_get_roundtrip` in v0.1.1.
+
 ## [0.1.1] - 2026-06-04
 
 ### Added
@@ -129,4 +171,5 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   in production code.
 - ~22 000 SLOC across 5 crates.
 
+[0.1.2]: https://github.com/cool-japan/oxiquic/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/cool-japan/oxiquic/releases/tag/v0.1.1
