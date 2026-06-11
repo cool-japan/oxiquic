@@ -5,6 +5,16 @@ All notable changes to OxiQUIC are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.3] - Unreleased
+
+### Added
+
+### Changed
+
+### Fixed
+
+---
+
 ## [0.1.2] - 2026-06-10
 
 ### Added

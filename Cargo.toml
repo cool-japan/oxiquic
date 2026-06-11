@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 rust-version = "1.80"
 authors = ["COOLJAPAN OU (Team Kitasan)"]
@@ -18,10 +18,10 @@ repository = "https://github.com/cool-japan/oxiquic"
 description = "OxiQUIC is the COOLJAPAN Pure-Rust QUIC transport (ring/aws-lc-rs-free)."
 
 [workspace.dependencies]
-oxiquic-core      = { path = "crates/oxiquic-core",      version = "0.1.2" }
-oxiquic-crypto    = { path = "crates/oxiquic-crypto",    version = "0.1.2" }
-oxiquic-transport = { path = "crates/oxiquic-transport", version = "0.1.2" }
-oxiquic-h3        = { path = "crates/oxiquic-h3",        version = "0.1.2" }
+oxiquic-core      = { path = "crates/oxiquic-core",      version = "0.1.3" }
+oxiquic-crypto    = { path = "crates/oxiquic-crypto",    version = "0.1.3" }
+oxiquic-transport = { path = "crates/oxiquic-transport", version = "0.1.3" }
+oxiquic-h3        = { path = "crates/oxiquic-h3",        version = "0.1.3" }
 
 # OxiCrypto — Pure-Rust crypto primitives (provides
 # HKDF-Expand-Label, AES single-block ECB, ChaCha20 keystream, AEADs, HMAC).

@@ -1,7 +1,7 @@
 # OxiQUIC TODO
 
 ## Status (updated 2026-06-10)
-**v0.1.2 released 2026-06-10 — in-house Pure-Rust QUIC engine on rustls::quic**: OxiQUIC
+**v0.1.3 (work in progress) — in-house Pure-Rust QUIC engine on rustls::quic**: OxiQUIC
 built its own RFC 9000/9001/9002 stack directly on `rustls::quic` TLS 1.3 API
 (driven by the `oxiquic-crypto` provider) over `tokio` UDP. `cargo tree
 -p oxiquic-transport --edges normal` has NO ring/aws-lc-rs/openssl. ~22 000 SLOC

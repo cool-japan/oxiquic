@@ -130,7 +130,7 @@ openssl, and openssl-sys tree-wide.
 | M4 | COMPLETE | HTTP/3 server, H3ServerBuilder, H3Responder, graceful shutdown |
 | M5 | COMPLETE | 0-RTT, stateless retry, version negotiation, key update, connection migration, MTU discovery, keep-alive, connection statistics |
 
-## Implementation Status (v0.1.2, 2026-06-10)
+## Implementation Status (v0.1.3, 2026-06-10)
 
 **Implemented:**
 - QUIC 1-RTT handshake over Pure-Rust TLS 1.3 (oxiquic-crypto provider)
