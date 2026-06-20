@@ -1,6 +1,6 @@
 # oxiquic-transport TODO
 
-## Status (updated 2026-05-29) — Wave 2: live QUIC transport on rustls
+## Status (updated 2026-06-19) — Wave 2: live QUIC transport on rustls
 
 The transport is now a real Pure-Rust QUIC stack built DIRECTLY on the
 `rustls::quic` TLS 1.3 API (driven by the `oxiquic-crypto` provider) over
@@ -179,14 +179,20 @@ tokio AsyncWrite/AsyncRead. The sans-io `Connection` is exported for
   — `bench_multi_stream_concurrent_50` in `benches/transport.rs` (`multi_stream_concurrent/sequential_1kb_per_stream/50`)
 - [x] Benchmark connection establishment rate: connections per second to a single server
   — `bench_connection_establishment_rate` in `benches/transport.rs` (`connection_rate/sequential_connects_10`)
-- [ ] Profile CPU utilization during 100MB transfer (identify bottlenecks in crypto/framing/syscalls) (deferred — profiling tooling)
+- [x] Profile CPU utilization during high-throughput transfer (identify bottlenecks in crypto/framing/syscalls) (2026-06-19)
+  — `cpu_profile.rs` bench added: 4 groups covering e2e throughput (1KB/64KB/1MB), raw UDP baseline,
+  STREAM frame encode/decode throughput, AES-128-GCM AEAD encrypt/decrypt throughput; prints
+  per-phase breakdown at bench startup (UDP ns, codec ns/op, AEAD ns/op, QUIC wall-time overhead).
 - [x] Benchmark memory usage per connection and per stream (track allocator stats) (2026-06-03)
   — `bench_memory_usage` added to `crates/oxiquic-transport/benches/transport.rs`; measures RSS
   delta before/after holding N connections (1, 10); prints per-connection kB estimate to stdout
   alongside the criterion timing measurements (N ∈ {1, 10} connections per iteration).
   RSS reader works on Linux (/proc/self/status) and macOS (mach_task_info); prints
   "unavailable" on other platforms and still provides timing data.
-- [ ] Compare Cubic vs BBR throughput on simulated 100ms RTT / 1% loss network (deferred — tc/netem required)
+- [x] Compare Cubic vs BBR vs NewReno throughput on simulated lossy network (2026-06-19)
+  — `congestion_compare.rs` bench added: in-process bidirectional lossy relay (no tc/netem required);
+  benchmarks 512 KiB payload throughput at lossless / 1% drop+10ms / 3% drop+30ms per algorithm;
+  also benchmarks cwnd growth rate (unit-level, no I/O) for N∈{10,100,1000} ACK events.
 
 ## Integration
 - [x] Use `oxitls-rcgen` for test certificate generation in integration tests (if available, else `rcgen` directly)

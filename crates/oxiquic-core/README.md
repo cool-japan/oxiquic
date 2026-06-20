@@ -21,17 +21,17 @@ and 100% Pure Rust (no `ring`, `aws-lc-rs`, or any C/C++ dependency).
 
 ```toml
 [dependencies]
-oxiquic-core = "0.1.1"
+oxiquic-core = "0.1.4"
 ```
 
 ### Optional features
 
 ```toml
 # Derive serde Serialize/Deserialize on the public types
-oxiquic-core = { version = "0.1.1", features = ["serde"] }
+oxiquic-core = { version = "0.1.4", features = ["serde"] }
 
 # Enable the From<oxitls_core::TlsError> conversion bridge into OxiQuicError
-oxiquic-core = { version = "0.1.1", features = ["oxitls"] }
+oxiquic-core = { version = "0.1.4", features = ["oxitls"] }
 ```
 
 ## Quick Start

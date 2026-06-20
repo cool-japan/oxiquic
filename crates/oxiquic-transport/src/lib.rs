@@ -65,9 +65,16 @@
 //!   configurable via [`TransportConfig::mtu_discovery`] (3 tests in
 //!   `tests/mtu_discovery.rs`).
 //!
-//! Not yet implemented: 0-RTT, stateless reset, ECN, MAX_STREAMS.
-//! RESET_STREAM/STOP_SENDING: frame encode/decode plumbed; end-to-end
-//! user-facing API stubs remain.
+//! Also implemented: **0-RTT** early data ([`ClientEndpoint::connect_0rtt`],
+//! client send and server accept paths), **MAX_STREAMS / STREAMS_BLOCKED**
+//! (frame codec, transport-parameter limits, and end-to-end peer-limit
+//! processing), **RESET_STREAM / STOP_SENDING** (frame codec plus the
+//! `reset()` / `stop_sending()` API on the stream handles), and **stateless
+//! reset** token derivation (RFC 9000 §10.3) with incoming-reset detection.
+//!
+//! Not implemented: **ECN** (RFC 9000 §13.4) — incoming ACK_ECN counts are
+//! parsed and discarded, and no ECN codepoints are marked on egress, so there
+//! is no ECN-based congestion response.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -96,6 +103,7 @@ mod stream;
 pub use bbr::{Bbr, BbrState, DeliveryRateEstimator, RateSample};
 pub use cc_dispatch::CongestionController;
 pub use config::{CongestionAlgorithm, TransportConfig};
+pub use connection::multipath::{MultipathState, PathState, PathValidation};
 pub use connection::{Connection, ConnectionState, MtuConfig, Role};
 pub use endpoint::{
     ClientEndpoint, DrivenConnection, Incoming, QuicConnection, ServerEndpoint,

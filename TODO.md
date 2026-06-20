@@ -1,14 +1,16 @@
 # OxiQUIC TODO
 
-## Status (updated 2026-06-10)
-**v0.1.2 released 2026-06-10 — in-house Pure-Rust QUIC engine on rustls::quic**: OxiQUIC
+## Status (updated 2026-06-19)
+**v0.1.4 — in-house Pure-Rust QUIC engine on rustls::quic**: OxiQUIC
 built its own RFC 9000/9001/9002 stack directly on `rustls::quic` TLS 1.3 API
 (driven by the `oxiquic-crypto` provider) over `tokio` UDP. `cargo tree
--p oxiquic-transport --edges normal` has NO ring/aws-lc-rs/openssl. ~22 000 SLOC
-across 5 crates, 329 unit+integration tests passing, zero clippy warnings,
+-p oxiquic-transport --edges normal` has NO ring/aws-lc-rs/openssl. ~24 000 SLOC
+across 5 crates, 342 unit+integration tests passing, zero clippy warnings,
 zero `unwrap()`/`panic!` in production code. FFI audit PASSED.
 ALPN negotiation support added: `alpn` constants module, `connect_with_alpn()`,
 `listen_with_alpn()`, `ServerEndpointBuilder::with_alpn_protocols()`.
+`QuicConnection::peer_addr()`, `DrivenConnection::peer_addr()`, and
+`DrivenConnection::is_closed()` added in v0.1.4.
 
 **5-crate workspace:**
 - **oxiquic-core** — COMPLETE: full RFC 9000 type system (StreamId/Initiator/
@@ -31,7 +33,8 @@ address promotion), multi-connection server demux (DCID-based routing),
 AsyncWrite/AsyncRead stream handles, facade connect()/listen(), keep-alive PING,
 idle timeout, connection statistics.
 
-**Deferred (not yet implemented):** RESET_STREAM/STOP_SENDING end-to-end (framing plumbed, user-facing API stubs remain); server push (upstream-limited: h3 0.0.8 has no push API); Multipath QUIC.
+**Deferred (not yet implemented):** H3 server push (upstream-limited: h3 0.0.8 has no push API); ECN (RFC 9000 §13.4) egress codepoints; session-ticket reuse across process restarts; Multipath QUIC full activation.
+**RESET_STREAM/STOP_SENDING:** end-to-end user API fully implemented — `SendStreamHandle::reset()`, `RecvStreamHandle::stop_sending()`, and `Connection::reset_stream()`/`stop_sending()` wired through the driver loop.
 
 ## Actual Subcrate Structure (5 crates)
 
@@ -221,14 +224,23 @@ idle timeout, connection statistics.
   `Throughput::Bytes` annotation reports bytes/s; H3 and H2 each use a pre-established warm
   connection to isolate handshake from payload delivery. Helpers: `do_h3_get_bytes`,
   `do_h2_get_bytes` (body fully drained and byte-count verified per iteration).
-- [ ] Benchmark: congestion control comparison (Cubic vs BBR on simulated lossy network) (deferred — requires tc/netem or similar)
+- [x] Benchmark: congestion control comparison (Cubic vs BBR vs NewReno on in-process lossy network) (2026-06-19)
+  — `congestion_compare.rs` added to `crates/oxiquic-transport/benches/`; in-process bidirectional relay
+  with deterministic packet-drop injection (no tc/netem required); 2 bench groups: `cc_compare`
+  (throughput at lossless / 1% drop 10ms / 3% drop 30ms per algorithm) and `cc_cwnd_growth`
+  (cwnd-after-N-acks unit bench isolating controller growth rates, N∈{10,100,1000}).
 - [x] Benchmark: connection migration overhead (path validation latency) — `migration.rs` added to `crates/oxiquic-transport/benches/`; 3 functions: `path_challenge_roundtrip`, `path_challenge_roundtrip_server_init`, `handshake_plus_migration` (2026-05-30)
 - [x] Benchmark: memory usage per connection and per stream (2026-06-03)
   — `bench_memory_usage` added to `crates/oxiquic-transport/benches/transport.rs` (transport layer)
   and `bench_h3_memory_profile` added to `crates/oxiquic-h3/benches/h3_bench.rs` (H3 layer);
   both use RSS delta via Linux /proc/self/status and macOS mach_task_info to print per-connection
   kB estimates at bench startup, plus criterion timing for connection setup rate.
-- [ ] Profile: CPU usage during high-throughput transfer (deferred — profiling tooling)
+- [x] Profile: CPU usage during high-throughput transfer (2026-06-19)
+  — `cpu_profile.rs` added to `crates/oxiquic-transport/benches/`; 4 bench groups:
+  `cpu_profile/e2e_throughput` (1 KB / 64 KB / 1 MB end-to-end QUIC echo throughput),
+  `cpu_profile/udp_echo_round_trip_ns` (raw UDP baseline), `cpu_profile/frame_encode_decode_1kb_x1000`
+  (STREAM frame codec CPU), `cpu_profile/aead_enc_dec_1kb_x1000` (AES-128-GCM encrypt+decrypt CPU);
+  prints per-phase breakdown (UDP baseline, framing, AEAD, QUIC overhead) at bench startup.
 - [x] Benchmark: QUIC vs TCP+TLS connection establishment time comparison (bench_tcp_tls_vs_quic_handshake added to transport.rs — 2026-05-30)
 
 ## Integration
@@ -239,7 +251,10 @@ idle timeout, connection statistics.
 - [x] Coordinate ALPN with oxitls: `h3` for HTTP/3, custom protocols for raw QUIC — implemented 2026-06-10: `alpn` constants module in `oxiquic-core`, `ServerEndpointBuilder::with_alpn_protocols`, `connect_with_alpn` / `listen_with_alpn` facade helpers, `QuicConnection::negotiated_alpn()` accessor, 3 integration tests
 - [ ] Coordinate TransportConfig with oxihttp-server for HTTP/3 server settings (blocked: external coordination with oxihttp-server)
 - [x] Ensure deny.toml bans match oxitls and oxihttp ban lists
-- [ ] Add oxiquic-bench crate (M5): criterion benchmarks with aws-lc-rs dev-dep comparison (deferred: new subcrate scope — H3 and transport benches in-crate cover core scenarios)
+- [x] Add oxiquic-bench crate (M5): criterion benchmarks with congestion control comparison and CPU profiling (2026-06-19)
+  — Implemented as in-crate benches (no new subcrate needed): `congestion_compare.rs` covers
+  Cubic/BBR/NewReno throughput at lossless/1%/3% loss; `cpu_profile.rs` covers per-phase CPU
+  (AEAD, framing, UDP baseline, end-to-end); all compile clean with zero warnings.
 
 ## Milestones
 - [x] M0: Workspace skeleton + oxitls quic-preview flag
@@ -254,7 +269,16 @@ idle timeout, connection statistics.
   - Files: crates/oxiquic-h3/src/server.rs
   - Tests: h3_server_builder_bind_and_accept, h3_responder_send_full, h3_connection_shutdown_goaway — all pass
   - Note: oxihttp h3 feature gate deferred (M5)
-- [ ] M5: Connection migration + multipath preview + benchmark crate (deferred: multipath not yet implemented; connection migration exists; H3 and transport benches added in-crate)
+- [x] M5: Connection migration + multipath preview + benchmark crate (2026-06-19)
+  — Connection migration: already complete (PATH_CHALLENGE/PATH_RESPONSE, `initiate_path_challenge`,
+  `set_candidate_peer_addr`, `path_validated`). Multipath preview implemented:
+  `MultipathState` + `PathState` + `PathValidation` in `src/connection/multipath.rs`;
+  API: `Connection::multipath_state()`, `add_path()`, `set_preferred_path()`, `path_count()`,
+  `active_path_rtt()`; per-path RTT estimation (RFC 9002 §5.3 EWMA), packet counters,
+  bandwidth estimate field, 8-path capacity limit, validation lifecycle (Unknown/Pending/Validated/
+  Failed). 12 unit tests, all passing. Exported from `lib.rs` as `MultipathState`, `PathState`,
+  `PathValidation`. Benchmark crate: in-crate benches added (`congestion_compare.rs`, `cpu_profile.rs`)
+  cover all scenarios previously deferred to an `oxiquic-bench` subcrate.
 
 ## Removed (stale quinn-wrapper items)
 

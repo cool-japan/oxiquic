@@ -20,8 +20,8 @@ bidirectional streams and reading/writing data. The crate is
 
 ```toml
 [dependencies]
-oxiquic-transport = "0.1.1"
-oxiquic-crypto    = "0.1.1"  # provides quic_crypto_provider()
+oxiquic-transport = "0.1.4"
+oxiquic-crypto    = "0.1.4"  # provides quic_crypto_provider()
 rustls            = "0.23"
 tokio             = { version = "1", features = ["full"] }
 ```
@@ -30,10 +30,10 @@ tokio             = { version = "1", features = ["full"] }
 
 ```toml
 # h3 adapter types (implements the `h3` crate's quic traits over OxiQUIC)
-oxiquic-transport = { version = "0.1.1", features = ["h3-compat"] }
+oxiquic-transport = { version = "0.1.4", features = ["h3-compat"] }
 
 # connect_insecure-style helpers for dev/testing
-oxiquic-transport = { version = "0.1.1", features = ["dangerous"] }
+oxiquic-transport = { version = "0.1.4", features = ["dangerous"] }
 ```
 
 ## Quick Start
@@ -135,6 +135,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `retry_count()` / `take_received_token()` | RFC 9000 §8.1 Retry state |
 | `zero_rtt_accepted()` | Whether 0-RTT early data was accepted |
 | `role()` / `is_closed()` / `ping()` | Role, close state, latest RTT |
+| `peer_addr()` | Remote peer `SocketAddr` after handshake (`Some` in normal operation) |
 | `streams_opened()` / `streams_closed()` | Lifetime stream counters |
 | `bytes_in_flight()` / `has_pending_stream_data()` | Congestion/queue state |
 | `stats()` | `oxiquic_core::ConnectionStats` snapshot |
@@ -155,6 +156,8 @@ Obtained from `QuicConnection::into_driven()`. Runs the socket loop in a
 | `accept_bidi_stream(..)` | Accept an inbound bidi stream |
 | `accept_uni_stream()` | Accept an inbound uni stream → `RecvStreamHandle` |
 | `negotiated_alpn()` | Negotiated ALPN bytes |
+| `peer_addr()` | Remote peer `SocketAddr` preserved from `into_driven()` call |
+| `is_closed()` | Atomic liveness hint: `true` once the driver task exits (Release/Acquire ordering) |
 | `write_tx()` | Clone the internal write channel (`WriteTx`) |
 | `close(error_code, reason)` | Close the connection |
 
@@ -273,11 +276,13 @@ Implemented and proven over real UDP loopback:
 - **Key update** (RFC 9001 §6).
 - **DPLPMTUD / path-MTU discovery** (RFC 8899) — enabled by default.
 
-Not yet implemented: 0-RTT (end-to-end), stateless reset, ECN, `MAX_STREAMS`.
-For `RESET_STREAM` / `STOP_SENDING` the frame encode/decode is plumbed but the
-end-to-end user-facing API stubs remain. Path migration defers anti-amplification
-limits, `NEW_CONNECTION_ID` issuance for migration, `PATH_CHALLENGE` PTO
-retransmission, and per-path congestion state to a future milestone.
+Also implemented: **0-RTT** early data (`ClientEndpoint::connect_0rtt`), **MAX_STREAMS /
+STREAMS_BLOCKED** (codec, limits, peer-limit enforcement), **RESET_STREAM / STOP_SENDING**
+(codec plus `reset()` / `stop_sending()` on the stream handles), and **stateless reset**
+(token derivation RFC 9000 §10.3, incoming-reset detection).
+
+Not implemented: **ECN** (RFC 9000 §13.4) — incoming ACK_ECN counts are parsed and
+discarded; no ECN codepoints are marked on egress.
 
 ## Cross-references
 

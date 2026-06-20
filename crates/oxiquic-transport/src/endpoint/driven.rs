@@ -8,6 +8,7 @@
 use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -58,6 +59,21 @@ pub struct DrivenConnection {
     /// [`super::QuicConnection::into_driven`] time when the handshake is
     /// already complete.
     pub(super) negotiated_alpn: Option<Vec<u8>>,
+    /// The remote peer address, captured from the [`ConnectionDriver`] before
+    /// the connection moves into the background task. `None` only if the
+    /// handshake completed before the driver learned the peer address (not
+    /// possible in normal operation).
+    pub(super) peer_addr: Option<SocketAddr>,
+    /// Shared closed-flag set to `true` by the driver task immediately before it
+    /// exits (both on graceful close and on I/O error). Callers may read this as
+    /// a *liveness hint*: a `true` value is definitive (the driver has exited),
+    /// but `false` only means the driver has not yet set the flag — it may still
+    /// be in the process of shutting down.
+    ///
+    /// The flag is written with [`Ordering::Release`] and read with
+    /// [`Ordering::Acquire`] so that observers on other threads that see `true`
+    /// also observe all connection-state writes that preceded the driver exit.
+    pub(super) closed: Arc<AtomicBool>,
 }
 
 impl DrivenConnection {
@@ -196,6 +212,32 @@ impl DrivenConnection {
         self.negotiated_alpn.as_deref()
     }
 
+    /// The remote peer address, captured from the connection driver immediately
+    /// before it moved into the background task.
+    ///
+    /// Returns `None` only if the handshake completed before the peer address
+    /// was resolved, which does not occur in normal operation.
+    #[must_use]
+    pub fn peer_addr(&self) -> Option<SocketAddr> {
+        self.peer_addr
+    }
+
+    /// Whether the background driver task has fully exited (connection closed).
+    ///
+    /// This is a *liveness hint*: once `true`, the driver has stopped and the
+    /// connection is definitely closed. A `false` return means the driver has
+    /// not yet set the flag — it may still be running or in the process of
+    /// shutting down.
+    ///
+    /// The flag is stored with [`std::sync::atomic::Ordering::Release`] by the
+    /// driver and loaded with [`std::sync::atomic::Ordering::Acquire`] here,
+    /// so a `true` observation is guaranteed to happen-after all
+    /// connection-state mutations performed by the driver before it exited.
+    #[must_use]
+    pub fn is_closed(&self) -> bool {
+        self.closed.load(Ordering::Acquire)
+    }
+
     /// Return a clone of the write channel. Used by the `h3-compat` layer so
     /// that receive-stream wrappers can send `STOP_SENDING` frames.
     #[cfg(feature = "h3-compat")]
@@ -237,6 +279,9 @@ pub(super) struct DrivenConnectionChannels {
     pub(super) accept_bidi_tx: mpsc::Sender<(SendStreamHandle, RecvStreamHandle)>,
     /// Delivery channel for peer-opened unidirectional streams.
     pub(super) accept_uni_tx: mpsc::Sender<RecvStreamHandle>,
+    /// Shared closed flag. Set to `true` with [`Ordering::Release`] immediately
+    /// before the driver task exits. Readable via [`DrivenConnection::is_closed`].
+    pub(super) closed: Arc<AtomicBool>,
 }
 
 /// The background I/O loop for a [`DrivenConnection`].
@@ -266,6 +311,7 @@ pub(super) async fn run_driven_connection(
         mut close_rx,
         accept_bidi_tx,
         accept_uni_tx,
+        closed,
     } = channels;
     /// Flush all pending outgoing datagrams to the socket. Returns `false` if
     /// the socket send failed (the caller should break the loop).
@@ -512,4 +558,9 @@ pub(super) async fn run_driven_connection(
     drop(read_senders);
     // `peer` is kept in scope for potential future use (connection migration).
     let _ = peer;
+
+    // Signal that the driver has exited. Written with Release ordering so that
+    // any observer that loads `true` with Acquire ordering is guaranteed to
+    // see all connection-state mutations that preceded this store.
+    closed.store(true, Ordering::Release);
 }

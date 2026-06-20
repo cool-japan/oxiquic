@@ -45,6 +45,7 @@ pub use zero_rtt::ZeroRttAccepted;
 use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -1304,6 +1305,21 @@ impl QuicConnection {
         self.drv().conn.role()
     }
 
+    /// The remote peer address for this connection.
+    ///
+    /// Returns `None` only if the handshake completed before the driver had a
+    /// chance to record the peer address, which does not occur in normal
+    /// operation. After a successful handshake this is guaranteed to be `Some`.
+    ///
+    /// For a server-side [`QuicConnection`] obtained from
+    /// [`ServerEndpoint::accept`], this is the client's UDP source address. For
+    /// a client-side connection this is the server address passed to
+    /// [`ClientEndpoint::connect`].
+    #[must_use]
+    pub fn peer_addr(&self) -> Option<SocketAddr> {
+        self.drv().peer
+    }
+
     /// Whether the connection has fully closed.
     #[must_use]
     pub fn is_closed(&self) -> bool {
@@ -1713,9 +1729,16 @@ impl QuicConnection {
             .expect("QuicConnection driver already consumed by into_driven")
             .into_parts();
 
-        // Capture the negotiated ALPN before `conn` is moved into the
-        // background task (handshake is already complete at this point).
+        // Capture the negotiated ALPN and peer address before `conn` is moved
+        // into the background task (handshake is already complete at this point).
         let negotiated_alpn = conn.negotiated_alpn();
+        // `peer` is the driver-level peer address, set during the handshake.
+        let peer_addr = peer;
+
+        // Shared closed flag: the driver sets this to `true` with Release
+        // ordering immediately before exiting. `DrivenConnection::is_closed`
+        // reads it with Acquire ordering.
+        let closed = Arc::new(AtomicBool::new(false));
 
         let task = tokio::spawn(run_driven_connection(
             socket,
@@ -1730,6 +1753,7 @@ impl QuicConnection {
                 close_rx,
                 accept_bidi_tx,
                 accept_uni_tx,
+                closed: Arc::clone(&closed),
             },
         ));
 
@@ -1742,6 +1766,8 @@ impl QuicConnection {
             accept_uni_rx: Arc::new(tokio::sync::Mutex::new(accept_uni_rx)),
             _task: Arc::new(task),
             negotiated_alpn,
+            peer_addr,
+            closed,
         }
     }
 }

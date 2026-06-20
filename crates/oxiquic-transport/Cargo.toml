@@ -41,3 +41,11 @@ harness = false
 [[bench]]
 name    = "migration"
 harness = false
+
+[[bench]]
+name    = "congestion_compare"
+harness = false
+
+[[bench]]
+name    = "cpu_profile"
+harness = false

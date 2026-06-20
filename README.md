@@ -26,8 +26,8 @@ driven by the `oxiquic-crypto` Pure-Rust crypto provider over `tokio` UDP —
   (AsyncRead) with independent flow control.
 - **ALPN negotiation**: `connect_with_alpn()` / `listen_with_alpn()` facade helpers,
   `ServerEndpointBuilder::with_alpn_protocols()`, and well-known constants in `oxiquic::alpn`.
-- **329 tests** (unit + integration), zero clippy warnings, zero `unwrap()`/`panic!`
-  in production code, ~22 000 SLOC.
+- **342 tests** (unit + integration), zero clippy warnings, zero `unwrap()`/`panic!`
+  in production code, ~24 000 SLOC.
 
 ## Crates
 
@@ -130,7 +130,7 @@ openssl, and openssl-sys tree-wide.
 | M4 | COMPLETE | HTTP/3 server, H3ServerBuilder, H3Responder, graceful shutdown |
 | M5 | COMPLETE | 0-RTT, stateless retry, version negotiation, key update, connection migration, MTU discovery, keep-alive, connection statistics |
 
-## Implementation Status (v0.1.2, 2026-06-10)
+## Implementation Status (v0.1.4, 2026-06-19)
 
 **Implemented:**
 - QUIC 1-RTT handshake over Pure-Rust TLS 1.3 (oxiquic-crypto provider)
@@ -153,11 +153,14 @@ openssl, and openssl-sys tree-wide.
 - Streaming request/response bodies over HTTP/3 DATA frames
 - GOAWAY graceful shutdown
 - Connection statistics (RTT, bytes/packets sent/recv/lost, congestion window)
+- RESET_STREAM/STOP_SENDING end-to-end user API: `SendStreamHandle::reset()` and `RecvStreamHandle::stop_sending()` wired through the full driver loop
+- `QuicConnection::peer_addr()` and `DrivenConnection::peer_addr()` — remote peer address after handshake (v0.1.4)
+- `DrivenConnection::is_closed()` — atomic liveness hint; `true` once the driver task exits (v0.1.4)
 
 **Deferred:**
 - 0-RTT user-facing session resumption API (handshake works; session-ticket reuse across process restarts deferred)
-- RESET_STREAM/STOP_SENDING end-to-end user API (framing complete; user-facing stubs remain)
 - H3 server push (upstream-limited: h3 0.0.8 has no push API)
+- ECN (RFC 9000 §13.4): parsed and discarded; no egress ECN codepoints marked
 - Multipath QUIC
 
 ## License

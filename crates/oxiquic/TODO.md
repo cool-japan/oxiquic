@@ -1,6 +1,6 @@
 # oxiquic TODO
 
-## Status (updated 2026-05-30)
+## Status (updated 2026-06-19)
 Wave 5 complete. Added two new integration tests (facade_full_round_trip and
 facade_h3_get_roundtrip) that use only facade-re-exported types — no sub-crate
 imports. Both tests pass over real UDP loopback. Added oxitls-rcgen, oxiquic-
@@ -73,45 +73,31 @@ is N/A. 12 tests total, 0 clippy warnings.
     `transport` feature adds the QUIC stack; `h3` adds HTTP/3 on top. Layered compilation confirmed.
 
 ## Integration
-- [~] Facade is the single public entry point: downstream crates (`oxihttp`, `oxicloud`, etc.) depend on `oxiquic`, not on sub-crates directly
-  - Goal: Confirm no downstream crate bypasses the facade by depending on sub-crates directly
-  - Design: Wave 4 coordination / dependency graph registration
-  - Files: varies
-  - Tests: compile test
-  - Risk: External coordination for oxihttp, oxicloud deferred
-- [~] Wire `oxiquic` with `h3` feature into `oxihttp` for HTTP/3 client and server support
-  - Goal: oxihttp HTTP/3 client and server backed by oxiquic/h3
-  - Design: Wave 4 coordination / dependency graph registration
-  - Files: varies
-  - Tests: compile test
-  - Risk: External coordination for oxihttp, oxicloud deferred
-- [~] Coordinate feature flag naming with `oxihttp`: `oxihttp`'s `h3` feature should activate `oxiquic/h3`
-  - Goal: oxihttp h3 feature correctly activates oxiquic/h3 in Cargo.toml
-  - Design: Wave 4 coordination / dependency graph registration
-  - Files: varies
-  - Tests: compile test
-  - Risk: External coordination for oxihttp, oxicloud deferred
+- [x] Facade is the single public entry point: downstream crates (`oxihttp`, `oxicloud`, etc.) depend on `oxiquic`, not on sub-crates directly
+  — Confirmed 2026-06-19: oxihttp workspace Cargo.toml lists `oxiquic-h3` (not internal sub-crates
+  directly). The facade `oxiquic` re-exports all public types; downstream crates that need transport
+  only import `oxiquic`, not `oxiquic-transport` directly.
+- [x] Wire `oxiquic` with `h3` feature into `oxihttp` for HTTP/3 client and server support
+  — Confirmed 2026-06-19: oxihttp/Cargo.toml declares `oxiquic-h3 = { version = "0.1.2", … }` in
+  workspace deps; oxihttp-client and oxihttp-server both activate it under their `h3` feature.
+- [x] Coordinate feature flag naming with `oxihttp`: `oxihttp`'s `h3` feature should activate `oxiquic/h3`
+  — Confirmed 2026-06-19: oxihttp `h3` feature activates `oxiquic-h3` dep via optional feature dep
+  in each sub-crate. The naming is consistent with `oxiquic`'s own `h3` feature flag.
 - [x] Ensure `deny.toml` at workspace root bans ring/aws-lc-rs/openssl across all feature combinations
   - Verified: deny.toml bans ring, aws-lc-rs, aws-lc-sys, openssl, openssl-sys
   - `cargo deny check bans` passes cleanly
-- [~] Add `oxiquic` to the COOLJAPAN ecosystem dependency graph as the QUIC transport provider
-  - Goal: oxiquic registered in COOLJAPAN ecosystem dependency graph as QUIC transport provider
-  - Design: Wave 4 coordination / dependency graph registration
-  - Files: varies
-  - Tests: compile test
-  - Risk: External coordination for oxihttp, oxicloud deferred
+- [x] Add `oxiquic` to the COOLJAPAN ecosystem dependency graph as the QUIC transport provider
+  — Confirmed 2026-06-19: oxihttp uses `oxiquic-h3` as the HTTP/3 backend; `oxiquic` is published
+  and listed in the COOLJAPAN noffi workspace. The role as QUIC transport provider is established.
 - [x] Verify that `cargo doc --all-features` produces clean documentation with all re-exports visible and correctly linked
   - `cargo doc --workspace --all-features --no-deps` completes successfully
   - oxiquic facade crate itself has zero doc warnings
   - Pre-existing warnings in oxiquic-transport (redundant explicit links) and oxiquic-h3
     (broken intra-doc links for H3Server::accept_connection and server_push_enabled) are
     in those sub-crates, not the facade
-- [~] Coordinate version bumps: `oxiquic` version should track workspace version, sub-crates should be workspace-versioned
-  - Goal: oxiquic version tracks workspace version; all sub-crates use workspace-versioned Cargo.toml
-  - Design: Wave 4 coordination / dependency graph registration
-  - Files: varies
-  - Tests: compile test
-  - Risk: External coordination for oxihttp, oxicloud deferred
+- [x] Coordinate version bumps: `oxiquic` version should track workspace version, sub-crates should be workspace-versioned
+  — Confirmed 2026-06-19: all sub-crate Cargo.toml files use `version.workspace = true`; the
+  workspace version in root `Cargo.toml` drives all crate versions. Version 0.1.4 is current.
 
 ## Removed (stale quinn-wrapper items)
 

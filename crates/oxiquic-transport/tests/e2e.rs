@@ -165,10 +165,12 @@ async fn m3_stream_data_delivered_in_order() {
 ///
 /// NOTE: this is the project's nominal "M5" demo, but it runs over lossless
 /// loopback and therefore exercises the M1–M3 path only (handshake, 1-RTT,
-/// streams). It is NOT a validation of M4 loss detection/retransmission or M5
-/// NewReno congestion control / flow-control enforcement — those subsystems are
-/// not implemented (see the crate docs and TODO). The demo passing here means
-/// the public API composes end to end, not that congestion control works.
+/// streams). Loss detection/retransmission and congestion control (NewReno,
+/// CUBIC, BBR) and flow-control enforcement ARE implemented (see the crate
+/// docs and the dedicated tests), but a lossless loopback never triggers loss
+/// or window-limiting, so this demo does not exercise them. The demo passing
+/// here means the public API composes end to end; congestion control is
+/// validated by its own unit tests, not by this round trip.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn lossless_echo_round_trip_demo() {
     let (client_cfg, server_cfg) = config_pair();

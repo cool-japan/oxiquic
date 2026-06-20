@@ -1,6 +1,6 @@
 # oxiquic-h3 TODO
 
-## Status (updated 2026-05-29)
+## Status (updated 2026-06-19)
 The HTTP/3 message and error model is IMPLEMENTED and tested (`error.rs`,
 `message.rs`; ~415 SLOC + 18 tests; clippy clean; deps: oxiquic-core +
 thiserror, no `h3`/`h3-quinn`): `H3ErrorCode` (all RFC 9114 §8.1 codes + QPACK

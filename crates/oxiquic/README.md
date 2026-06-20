@@ -17,7 +17,7 @@ with **no dependency on ring, aws-lc-rs, or any C/C++ cryptographic libraries**.
 
 ```toml
 [dependencies]
-oxiquic = { version = "0.1.1", features = ["transport"] }
+oxiquic = { version = "0.1.4", features = ["transport"] }
 ```
 
 ```rust

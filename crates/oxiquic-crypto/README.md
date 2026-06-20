@@ -35,14 +35,14 @@ keys. The crate is `#![forbid(unsafe_code)]`.
 
 ```toml
 [dependencies]
-oxiquic-crypto = "0.1.1"
+oxiquic-crypto = "0.1.4"
 ```
 
 ### Optional features
 
 ```toml
 # Expose oxitls_quic_provider(), an alternative provider sourced from oxitls
-oxiquic-crypto = { version = "0.1.1", features = ["oxitls-provider"] }
+oxiquic-crypto = { version = "0.1.4", features = ["oxitls-provider"] }
 ```
 
 ## Quick Start

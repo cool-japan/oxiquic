@@ -5,6 +5,46 @@ All notable changes to OxiQUIC are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.4] - 2026-06-19
+
+### Added
+
+#### oxiquic-transport
+- `QuicConnection::peer_addr() -> Option<SocketAddr>`: returns the remote peer
+  address after a successful handshake. For server-side connections this is the
+  client UDP source address; for client-side connections this is the server address
+  passed to `ClientEndpoint::connect`. Guaranteed to be `Some` after the handshake
+  in normal operation.
+- `DrivenConnection::peer_addr() -> Option<SocketAddr>`: peer address preserved
+  across `QuicConnection::into_driven()` so callers retain remote address information
+  after moving the connection into background I/O mode.
+- `DrivenConnection::is_closed() -> bool`: liveness hint backed by an `Arc<AtomicBool>`
+  written with `Release` ordering by the driver task immediately before it exits.
+  A `true` result is definitive (driver has stopped); `false` means the driver has
+  not yet set the flag and may still be running. Reads with `Acquire` ordering so
+  callers that observe `true` also observe all connection-state mutations that
+  preceded the driver exit.
+
+### Changed
+- `oxiquic-transport` crate-level doc comment updated: clarifies that 0-RTT,
+  MAX_STREAMS/STREAMS_BLOCKED, RESET_STREAM/STOP_SENDING, and stateless reset are
+  all implemented; narrows the "not yet implemented" note to ECN only (RFC 9000 §13.4).
+- End-to-end test `lossless_echo_round_trip_demo` comment corrected: the demo
+  cannot exercise congestion control or loss detection on lossless loopback, but
+  those subsystems are implemented and validated by their own unit tests.
+
+### Fixed
+- `into_driven` no longer silently drops the peer address: it now captures the
+  driver's `peer` field before moving `conn` into the background task and stores it
+  in `DrivenConnection::peer_addr`.
+
+## [0.1.3] - 2026-06-15
+
+### Changed
+- Version bump to 0.1.3 across all workspace crates (no functional code changes).
+
+---
+
 ## [0.1.2] - 2026-06-10
 
 ### Added
@@ -171,5 +211,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   in production code.
 - ~22 000 SLOC across 5 crates.
 
+[0.1.4]: https://github.com/cool-japan/oxiquic/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/cool-japan/oxiquic/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/cool-japan/oxiquic/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/cool-japan/oxiquic/releases/tag/v0.1.1

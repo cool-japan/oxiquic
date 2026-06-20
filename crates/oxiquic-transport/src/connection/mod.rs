@@ -14,6 +14,7 @@
 
 pub mod cid;
 mod keys_path;
+pub mod multipath;
 mod recovery;
 mod recv;
 mod send;
@@ -396,6 +397,13 @@ pub struct Connection {
     /// packet**, used to detect the RFC 9000 §19.16 same-packet violation.
     /// Cleared at the start of each call to `process_frames`.
     pub(super) cids_issued_this_packet: std::collections::HashSet<u64>,
+
+    // ─── Multipath preview (draft-ietf-quic-multipath) ──────────────────────
+    /// Per-path state for all known paths. The initial path (index 0) is
+    /// always present and starts in Validated state. Additional paths may be
+    /// registered via [`Connection::add_path`] and promoted via
+    /// [`Connection::set_preferred_path`].
+    pub(super) multipath: multipath::MultipathState,
 }
 
 impl Connection {
@@ -679,6 +687,8 @@ impl Connection {
             peer_cid_pool: PeerCidPool::new(peer_cid_for_pool, active_cid_limit),
             pending_cid_events: VecDeque::new(),
             cids_issued_this_packet: std::collections::HashSet::new(),
+            // Multipath preview (draft-ietf-quic-multipath).
+            multipath: multipath::MultipathState::new(peer_addr),
         }
     }
 

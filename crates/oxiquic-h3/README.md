@@ -22,13 +22,13 @@ The crate is `#![forbid(unsafe_code)]`.
 ```toml
 [dependencies]
 # h3-compat is on by default and enables the client/server.
-oxiquic-h3 = "0.1.1"
+oxiquic-h3 = "0.1.4"
 ```
 
 ### Optional features
 
 ```toml
-oxiquic-h3 = { version = "0.1.1", features = [
+oxiquic-h3 = { version = "0.1.4", features = [
     "serde",    # H3Response::body_json / typed JSON request helpers
     "tracing",  # tracing spans around requests
 ] }

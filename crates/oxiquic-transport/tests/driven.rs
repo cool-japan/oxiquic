@@ -140,6 +140,108 @@ async fn use_tokio_io_copy() {
     );
 }
 
+/// Verify the three new 0.1.3 additions:
+///   (a) `QuicConnection::peer_addr()` — server-side accepted connection reports
+///       the client's local address as its peer address.
+///   (b) `DrivenConnection::peer_addr()` — value survives the `into_driven()`
+///       transition.
+///   (c) `DrivenConnection::is_closed()` — flips from `false` to `true` after
+///       the connection is closed and the driver task exits.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn peer_addr_and_is_closed() {
+    let (client_cfg, server_cfg) = config_pair();
+    let transport = TransportConfig::default();
+
+    let server = ServerEndpoint::bind(loopback(), server_cfg, transport.clone())
+        .await
+        .expect("bind server");
+    let server_addr = server.local_addr().expect("server addr");
+
+    // Server task: accept, check peer_addr, convert to driven, return addresses.
+    let server_task = tokio::spawn(async move {
+        let conn = server.accept().await.expect("server accept");
+
+        // (a) QuicConnection::peer_addr() on the server side should be Some(_).
+        let server_side_peer_addr = conn
+            .peer_addr()
+            .expect("server QuicConnection::peer_addr() must be Some after handshake");
+
+        // Convert to driven and verify peer_addr survives.
+        let driven = conn.into_driven();
+
+        // (b) DrivenConnection::peer_addr() must equal the address we read above.
+        let driven_peer_addr = driven
+            .peer_addr()
+            .expect("DrivenConnection::peer_addr() must be Some after into_driven");
+        assert_eq!(
+            server_side_peer_addr, driven_peer_addr,
+            "peer_addr must be identical before and after into_driven"
+        );
+
+        // (c) is_closed must be false right after construction.
+        assert!(
+            !driven.is_closed(),
+            "is_closed must be false on a live connection"
+        );
+
+        // Close and drain so the driver task exits.
+        driven.close(0, b"").await.expect("close");
+        // Give the driver task a moment to exit.
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        assert!(
+            driven.is_closed(),
+            "is_closed must be true after close + driver exit"
+        );
+
+        (server_side_peer_addr, driven_peer_addr)
+    });
+
+    let client = ClientEndpoint::bind(loopback(), client_cfg, transport)
+        .await
+        .expect("bind client");
+    let client_local_addr = client.local_addr().expect("client local addr");
+
+    let conn = client
+        .connect(server_addr, "localhost")
+        .await
+        .expect("client connect");
+
+    // (a) Client QuicConnection::peer_addr() should equal the server address.
+    let client_peer = conn
+        .peer_addr()
+        .expect("client QuicConnection::peer_addr() must be Some");
+    assert_eq!(
+        client_peer, server_addr,
+        "client peer_addr must equal the server bind address"
+    );
+
+    let (server_side_peer_addr, driven_peer_addr) = server_task.await.expect("server task");
+
+    // The server's peer address for this connection must equal the client's local address.
+    assert_eq!(
+        server_side_peer_addr, client_local_addr,
+        "server-side peer_addr must equal client local_addr"
+    );
+    assert_eq!(
+        driven_peer_addr, client_local_addr,
+        "DrivenConnection::peer_addr must equal client local_addr"
+    );
+
+    // (c) Client side: is_closed after close.
+    let driven_client = conn.into_driven();
+    assert!(
+        !driven_client.is_closed(),
+        "client is_closed must be false initially"
+    );
+    driven_client.close(0, b"").await.expect("close");
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    assert!(
+        driven_client.is_closed(),
+        "client is_closed must be true after close + driver exit"
+    );
+}
+
 /// Verify that after `into_driven`, the server can also use `DrivenConnection`
 /// and both sides exchange data through `AsyncRead`/`AsyncWrite` handles.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
