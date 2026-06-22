@@ -45,7 +45,7 @@ Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-oxiquic = "0.1"
+oxiquic = "0.2"
 ```
 
 ### QUIC client
@@ -130,7 +130,7 @@ openssl, and openssl-sys tree-wide.
 | M4 | COMPLETE | HTTP/3 server, H3ServerBuilder, H3Responder, graceful shutdown |
 | M5 | COMPLETE | 0-RTT, stateless retry, version negotiation, key update, connection migration, MTU discovery, keep-alive, connection statistics |
 
-## Implementation Status (v0.1.4, 2026-06-19)
+## Implementation Status (v0.2.0, 2026-06-22)
 
 **Implemented:**
 - QUIC 1-RTT handshake over Pure-Rust TLS 1.3 (oxiquic-crypto provider)

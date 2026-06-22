@@ -5,6 +5,17 @@ All notable changes to OxiQUIC are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-06-22
+
+### Changed
+- Bump `oxitls` dependency to `^0.2.0` across the workspace (oxiquic-crypto, oxiquic).
+
+### Security
+- Clears PENDING-REPUBLISH status: oxiquic 0.1.x depended on oxitls 0.1.x which had a
+  native-cert leak (webpki-roots native store bleed-through). The 0.2.0 line ships with
+  oxitls 0.2.0 which resolves that issue; all users of the `oxitls-provider` feature
+  should upgrade.
+
 ## [0.1.4] - 2026-06-19
 
 ### Added
