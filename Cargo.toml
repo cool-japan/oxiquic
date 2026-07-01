@@ -11,7 +11,7 @@ members = [
 [workspace.package]
 version = "0.2.1"
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.85"
 authors = ["COOLJAPAN OU (Team Kitasan)"]
 license = "Apache-2.0"
 repository = "https://github.com/cool-japan/oxiquic"
@@ -31,11 +31,16 @@ oxicrypto         = { version = "0.2.0", default-features = false, features = ["
 sha2              = { version = "0.11.0", default-features = false }
 hmac              = { version = "0.13.0", default-features = false }
 zeroize           = { version = "1.9.0",  default-features = false }
-# AEAD ciphers + traits for QUIC packet protection (aead 0.5 chain, matching
-# oxicrypto-aead / rustls-rustcrypto so a single copy resolves).
-aead              = { version = "0.5.2",  default-features = false }
-aes-gcm           = { version = "0.10.3", default-features = false, features = ["aes"] }
-chacha20poly1305  = { version = "0.10.1", default-features = false }
+# AEAD ciphers + traits for QUIC packet protection, used directly by
+# oxiquic-crypto/oxiquic-transport (aead 0.6 / hybrid-array chain). This
+# resolves as a SEPARATE copy from the aead 0.5 chain that oxicrypto-aead and
+# rustls-rustcrypto still pull in — that's fine, the two never need to share
+# concrete AEAD types: everything crossing that boundary goes through rustls's
+# own `MessageEncrypter`/`MessageDecrypter`/`PacketKey` trait objects, not raw
+# `aead::*` types. See ~/work/cargo-upgrade/oxiquic.toml for upgrade history.
+aead              = { version = "0.6.1",  default-features = false }
+aes-gcm           = { version = "0.11.0", default-features = false, features = ["aes"] }
+chacha20poly1305  = { version = "0.11.0", default-features = false }
 # oxitls-rcgen — Pure-Rust self-signed cert generation (dev-dependency only, for
 # the in-memory QUIC handshake test).
 oxitls-rcgen      = { version = "0.2.0" }

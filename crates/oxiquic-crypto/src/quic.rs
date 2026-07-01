@@ -13,7 +13,7 @@
 
 use alloc::boxed::Box;
 
-use aead::AeadInPlace;
+use aead::AeadInOut;
 use oxicrypto::cipher::{aes128_encrypt_block, aes256_encrypt_block, chacha20_keystream_block};
 use rustls::crypto::cipher::{AeadKey, Iv, Nonce};
 use rustls::quic::{Algorithm, HeaderProtectionKey, PacketKey, Tag};
@@ -204,18 +204,21 @@ impl QuicPacketKey {
         let nonce_bytes = Nonce::new(&self.iv, packet_number).0;
         let tag = match &self.aead {
             PacketAead::Aes128(c) => {
-                let n = aead::Nonce::<aes_gcm::Aes128Gcm>::clone_from_slice(&nonce_bytes);
-                c.encrypt_in_place_detached(&n, header, payload)
+                let n = aead::Nonce::<aes_gcm::Aes128Gcm>::try_from(nonce_bytes.as_slice())
+                    .map_err(|_| Error::EncryptError)?;
+                c.encrypt_inout_detached(&n, header, payload.into())
             }
             PacketAead::Aes256(c) => {
-                let n = aead::Nonce::<aes_gcm::Aes256Gcm>::clone_from_slice(&nonce_bytes);
-                c.encrypt_in_place_detached(&n, header, payload)
+                let n = aead::Nonce::<aes_gcm::Aes256Gcm>::try_from(nonce_bytes.as_slice())
+                    .map_err(|_| Error::EncryptError)?;
+                c.encrypt_inout_detached(&n, header, payload.into())
             }
             PacketAead::ChaCha20(c) => {
-                let n = aead::Nonce::<chacha20poly1305::ChaCha20Poly1305>::clone_from_slice(
-                    &nonce_bytes,
-                );
-                c.encrypt_in_place_detached(&n, header, payload)
+                let n = aead::Nonce::<chacha20poly1305::ChaCha20Poly1305>::try_from(
+                    nonce_bytes.as_slice(),
+                )
+                .map_err(|_| Error::EncryptError)?;
+                c.encrypt_inout_detached(&n, header, payload.into())
             }
             PacketAead::Invalid => return Err(Error::EncryptError),
         }
@@ -239,22 +242,27 @@ impl QuicPacketKey {
 
         match &self.aead {
             PacketAead::Aes128(c) => {
-                let n = aead::Nonce::<aes_gcm::Aes128Gcm>::clone_from_slice(&nonce_bytes);
-                let tag = aead::Tag::<aes_gcm::Aes128Gcm>::clone_from_slice(tag_bytes);
-                c.decrypt_in_place_detached(&n, header, ct, &tag)
+                let n = aead::Nonce::<aes_gcm::Aes128Gcm>::try_from(nonce_bytes.as_slice())
+                    .map_err(|_| Error::DecryptError)?;
+                let tag = aead::Tag::<aes_gcm::Aes128Gcm>::try_from(&*tag_bytes)
+                    .map_err(|_| Error::DecryptError)?;
+                c.decrypt_inout_detached(&n, header, ct.into(), &tag)
             }
             PacketAead::Aes256(c) => {
-                let n = aead::Nonce::<aes_gcm::Aes256Gcm>::clone_from_slice(&nonce_bytes);
-                let tag = aead::Tag::<aes_gcm::Aes256Gcm>::clone_from_slice(tag_bytes);
-                c.decrypt_in_place_detached(&n, header, ct, &tag)
+                let n = aead::Nonce::<aes_gcm::Aes256Gcm>::try_from(nonce_bytes.as_slice())
+                    .map_err(|_| Error::DecryptError)?;
+                let tag = aead::Tag::<aes_gcm::Aes256Gcm>::try_from(&*tag_bytes)
+                    .map_err(|_| Error::DecryptError)?;
+                c.decrypt_inout_detached(&n, header, ct.into(), &tag)
             }
             PacketAead::ChaCha20(c) => {
-                let n = aead::Nonce::<chacha20poly1305::ChaCha20Poly1305>::clone_from_slice(
-                    &nonce_bytes,
-                );
-                let tag =
-                    aead::Tag::<chacha20poly1305::ChaCha20Poly1305>::clone_from_slice(tag_bytes);
-                c.decrypt_in_place_detached(&n, header, ct, &tag)
+                let n = aead::Nonce::<chacha20poly1305::ChaCha20Poly1305>::try_from(
+                    nonce_bytes.as_slice(),
+                )
+                .map_err(|_| Error::DecryptError)?;
+                let tag = aead::Tag::<chacha20poly1305::ChaCha20Poly1305>::try_from(&*tag_bytes)
+                    .map_err(|_| Error::DecryptError)?;
+                c.decrypt_inout_detached(&n, header, ct.into(), &tag)
             }
             PacketAead::Invalid => return Err(Error::DecryptError),
         }

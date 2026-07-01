@@ -14,7 +14,7 @@
 
 use alloc::boxed::Box;
 
-use aead::{AeadInPlace, Buffer, KeyInit};
+use aead::{AeadInOut, Buffer, KeyInit};
 use rustls::crypto::cipher::{
     make_tls13_aad, AeadKey, BorrowedPayload, InboundOpaqueMessage, InboundPlainMessage, Iv,
     MessageDecrypter, MessageEncrypter, Nonce, OutboundOpaqueMessage, OutboundPlainMessage,
@@ -68,7 +68,7 @@ impl AsMut<[u8]> for DecryptBufferAdapter<'_, '_> {
 
 impl Buffer for DecryptBufferAdapter<'_, '_> {
     fn extend_from_slice(&mut self, _: &[u8]) -> aead::Result<()> {
-        // `AeadInPlace::decrypt_in_place` only ever truncates.
+        // `AeadInOut::decrypt_in_place` only ever truncates.
         Err(aead::Error)
     }
 
@@ -84,14 +84,14 @@ impl Buffer for DecryptBufferAdapter<'_, '_> {
 /// The AEAD is `Option` so that a key-construction failure (which cannot occur
 /// for a correctly sized key) yields encrypt/decrypt errors rather than a
 /// panic.
-struct Tls13Cipher<A: AeadInPlace> {
+struct Tls13Cipher<A: AeadInOut> {
     aead: Option<A>,
     iv: Iv,
 }
 
 impl<A> MessageEncrypter for Tls13Cipher<A>
 where
-    A: AeadInPlace + Send + Sync,
+    A: AeadInOut + Send + Sync,
 {
     fn encrypt(
         &mut self,
@@ -105,7 +105,8 @@ where
         payload.extend_from_chunks(&m.payload);
         payload.extend_from_slice(&m.typ.to_array());
 
-        let nonce = aead::Nonce::<A>::clone_from_slice(&Nonce::new(&self.iv, seq).0);
+        let nonce = aead::Nonce::<A>::try_from(Nonce::new(&self.iv, seq).0.as_slice())
+            .map_err(|_| Error::EncryptError)?;
         let aad = make_tls13_aad(total_len);
 
         aead.encrypt_in_place(&nonce, &aad, &mut EncryptBufferAdapter(&mut payload))
@@ -125,7 +126,7 @@ where
 
 impl<A> MessageDecrypter for Tls13Cipher<A>
 where
-    A: AeadInPlace + Send + Sync,
+    A: AeadInOut + Send + Sync,
 {
     fn decrypt<'a>(
         &mut self,
@@ -134,7 +135,8 @@ where
     ) -> Result<InboundPlainMessage<'a>, Error> {
         let aead = self.aead.as_ref().ok_or(Error::DecryptError)?;
         let payload = &mut m.payload;
-        let nonce = aead::Nonce::<A>::clone_from_slice(&Nonce::new(&self.iv, seq).0);
+        let nonce = aead::Nonce::<A>::try_from(Nonce::new(&self.iv, seq).0.as_slice())
+            .map_err(|_| Error::DecryptError)?;
         let aad = make_tls13_aad(payload.len());
 
         aead.decrypt_in_place(&nonce, &aad, &mut DecryptBufferAdapter(payload))

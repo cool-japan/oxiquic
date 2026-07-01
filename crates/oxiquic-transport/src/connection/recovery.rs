@@ -234,7 +234,7 @@ impl Connection {
                     Direction::Bidirectional => {
                         if self
                             .pending_max_streams_bidi
-                            .map_or(true, |existing| *max > existing)
+                            .is_none_or(|existing| *max > existing)
                         {
                             self.pending_max_streams_bidi = Some(*max);
                         }
@@ -242,7 +242,7 @@ impl Connection {
                     Direction::Unidirectional => {
                         if self
                             .pending_max_streams_uni
-                            .map_or(true, |existing| *max > existing)
+                            .is_none_or(|existing| *max > existing)
                         {
                             self.pending_max_streams_uni = Some(*max);
                         }

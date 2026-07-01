@@ -22,7 +22,7 @@ rustls-pki-types = { workspace = true }
 tokio = { workspace = true }
 h3 = { workspace = true, optional = true }
 bytes = { workspace = true, optional = true }
-aes-gcm = { workspace = true, features = ["aes"] }
+aes-gcm = { workspace = true, features = ["aes", "alloc"] }
 hmac = { workspace = true }
 sha2 = { workspace = true }
 rustls-rustcrypto = { workspace = true }

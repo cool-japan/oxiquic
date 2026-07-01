@@ -736,9 +736,9 @@ pub fn compute_retry_integrity_tag(
     pseudo.extend_from_slice(odcid);
     pseudo.extend_from_slice(retry_packet_without_tag);
 
-    let key = aes_gcm::Key::<Aes128Gcm>::from_slice(&RETRY_KEY);
-    let cipher = Aes128Gcm::new(key);
-    let nonce = aes_gcm::Nonce::from_slice(&RETRY_NONCE);
+    let key = aes_gcm::Key::<Aes128Gcm>::try_from(RETRY_KEY.as_slice()).ok()?;
+    let cipher = Aes128Gcm::new(&key);
+    let nonce = aes_gcm::aead::Nonce::<Aes128Gcm>::try_from(RETRY_NONCE.as_slice()).ok()?;
 
     // The tag is produced by AES-128-GCM sealing the empty plaintext.
     // The `associated_data` is the pseudo-packet; `msg` is empty.
@@ -746,7 +746,7 @@ pub fn compute_retry_integrity_tag(
         msg: &[],
         aad: &pseudo,
     };
-    let sealed = cipher.encrypt(nonce, payload).ok()?;
+    let sealed = cipher.encrypt(&nonce, payload).ok()?;
     // AES-128-GCM over empty plaintext produces only the 16-byte tag.
     if sealed.len() != 16 {
         return None;

@@ -235,13 +235,13 @@ fn frame_codec_round_trip_n(n: usize) -> usize {
 /// successful encrypt+decrypt pairs.
 fn aead_encrypt_decrypt_n(n: usize) -> usize {
     use aes_gcm::{
-        aead::{Aead, KeyInit, Payload},
-        Aes128Gcm, Key, Nonce,
+        aead::{Aead, KeyInit, Nonce, Payload},
+        Aes128Gcm, Key,
     };
 
     let key_bytes = [0x01u8; 16];
-    let key = Key::<Aes128Gcm>::from_slice(&key_bytes);
-    let cipher = Aes128Gcm::new(key);
+    let key = Key::<Aes128Gcm>::try_from(key_bytes.as_slice()).expect("fixed-size 16-byte key");
+    let cipher = Aes128Gcm::new(&key);
 
     let plaintext = vec![0xABu8; 1024];
     let aad = b"quic-aead-aad";
@@ -253,18 +253,19 @@ fn aead_encrypt_decrypt_n(n: usize) -> usize {
         let mut nonce_bytes = [0u8; 12];
         let seq_be = (seq as u64).to_be_bytes();
         nonce_bytes[4..].copy_from_slice(&seq_be);
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce =
+            Nonce::<Aes128Gcm>::try_from(nonce_bytes.as_slice()).expect("fixed-size 12-byte nonce");
 
         let enc_payload = Payload {
             msg: &plaintext,
             aad: aad.as_ref(),
         };
-        if let Ok(ciphertext) = cipher.encrypt(nonce, enc_payload) {
+        if let Ok(ciphertext) = cipher.encrypt(&nonce, enc_payload) {
             let dec_payload = Payload {
                 msg: &ciphertext,
                 aad: aad.as_ref(),
             };
-            if cipher.decrypt(nonce, dec_payload).is_ok() {
+            if cipher.decrypt(&nonce, dec_payload).is_ok() {
                 count += 1;
             }
         }

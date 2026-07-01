@@ -120,7 +120,7 @@ impl RttEstimator {
         };
 
         // rttvar = 3/4 * rttvar + 1/4 * |smoothed_rtt - adjusted_rtt|.
-        let rttvar_sample = abs_diff(self.smoothed_rtt, adjusted_rtt);
+        let rttvar_sample = self.smoothed_rtt.abs_diff(adjusted_rtt);
         self.rttvar = (self.rttvar * 3 + rttvar_sample) / 4;
         // smoothed_rtt = 7/8 * smoothed_rtt + 1/8 * adjusted_rtt.
         self.smoothed_rtt = (self.smoothed_rtt * 7 + adjusted_rtt) / 8;
@@ -141,15 +141,6 @@ impl RttEstimator {
     #[must_use]
     pub fn pto_base(&self, max_ack_delay: Duration) -> Duration {
         self.smoothed_rtt + (self.rttvar * 4).max(K_GRANULARITY) + max_ack_delay
-    }
-}
-
-/// Absolute difference between two durations.
-fn abs_diff(a: Duration, b: Duration) -> Duration {
-    if a >= b {
-        a - b
-    } else {
-        b - a
     }
 }
 
